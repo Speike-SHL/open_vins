@@ -37,13 +37,13 @@ void StateHelper::EKFPropagation(std::shared_ptr<State> state, const std::vector
                                  const std::vector<std::shared_ptr<Type>> &order_OLD, const Eigen::MatrixXd &Phi,
                                  const Eigen::MatrixXd &Q) {
 
-  // We need at least one old and new variable
+  // order New 和 order OLD 至少需要一个
   if (order_NEW.empty() || order_OLD.empty()) {
     PRINT_ERROR(RED "StateHelper::EKFPropagation() - Called with empty variable arrays!\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
-  // Loop through our Phi order and ensure that they are continuous in memory
+  // 确保新状态变量排列的顺序在内存中连续，并且计算出新排列的总 size
   int size_order_NEW = order_NEW.at(0)->size();
   for (size_t i = 0; i < order_NEW.size() - 1; i++) {
     if (order_NEW.at(i)->id() + order_NEW.at(i)->size() != order_NEW.at(i + 1)->id()) {
@@ -55,19 +55,20 @@ void StateHelper::EKFPropagation(std::shared_ptr<State> state, const std::vector
     size_order_NEW += order_NEW.at(i + 1)->size();
   }
 
-  // Size of the old phi matrix
+  // 计算出旧状态变量排列的总 size
   int size_order_OLD = order_OLD.at(0)->size();
   for (size_t i = 0; i < order_OLD.size() - 1; i++) {
     size_order_OLD += order_OLD.at(i + 1)->size();
   }
 
-  // Assert that we have correct sizes
+  // 断言 Phi = (size_order_NEW x size_order_OLD)
+  // Q = (size_order_NEW x size_order_NEW)
   assert(size_order_NEW == Phi.rows());
   assert(size_order_OLD == Phi.cols());
   assert(size_order_NEW == Q.cols());
   assert(size_order_NEW == Q.rows());
 
-  // Get the location in small phi for each measuring variable
+  // 计算出每个旧状态变量在 Phi 中的起始列索引
   int current_it = 0;
   std::vector<int> Phi_id;
   for (const auto &var : order_OLD) {
@@ -75,6 +76,7 @@ void StateHelper::EKFPropagation(std::shared_ptr<State> state, const std::vector
     current_it += var->size();
   }
 
+  // 核心步骤
   // Loop through all our old states and get the state transition times it
   // Cov_PhiT = [ Pxx ] [ Phi' ]'
   Eigen::MatrixXd Cov_PhiT = Eigen::MatrixXd::Zero(state->_Cov.rows(), Phi.rows());
@@ -113,17 +115,18 @@ void StateHelper::EKFPropagation(std::shared_ptr<State> state, const std::vector
   }
 }
 
+// NOTE 见 https://docs.openvins.com/dev-index.html
 void StateHelper::EKFUpdate(std::shared_ptr<State> state, const std::vector<std::shared_ptr<Type>> &H_order, const Eigen::MatrixXd &H,
                             const Eigen::VectorXd &res, const Eigen::MatrixXd &R) {
 
   //==========================================================
   //==========================================================
-  // Part of the Kalman Gain K = (P*H^T)*S^{-1} = M*S^{-1}
+  // 卡尔曼增益的一部分 K = (P*H^T)*S^{-1} = M*S^{-1}
   assert(res.rows() == R.rows());
   assert(H.rows() == res.rows());
   Eigen::MatrixXd M_a = Eigen::MatrixXd::Zero(state->_Cov.rows(), res.rows());
 
-  // Get the location in small jacobian for each measuring variable
+  // 获取每个测量变量在小雅可比矩阵中的位置
   int current_it = 0;
   std::vector<int> H_id;
   for (const auto &meas_var : H_order) {
@@ -133,9 +136,9 @@ void StateHelper::EKFUpdate(std::shared_ptr<State> state, const std::vector<std:
 
   //==========================================================
   //==========================================================
-  // For each active variable find its M = P*H^T
+  // 对每个活动变量，计算其 M = P*H^T
   for (const auto &var : state->_variables) {
-    // Sum up effect of each subjacobian = K_i= \sum_m (P_im Hm^T)
+    // 累加每个子雅可比的影响 = K_i= \sum_m (P_im Hm^T)
     Eigen::MatrixXd M_i = Eigen::MatrixXd::Zero(var->size(), res.rows());
     for (size_t i = 0; i < H_order.size(); i++) {
       std::shared_ptr<Type> meas_var = H_order[i];
@@ -147,28 +150,30 @@ void StateHelper::EKFUpdate(std::shared_ptr<State> state, const std::vector<std:
 
   //==========================================================
   //==========================================================
-  // Get covariance of the involved terms
+  // 获取相关项的协方差
   Eigen::MatrixXd P_small = StateHelper::get_marginal_covariance(state, H_order);
 
-  // Residual covariance S = H*Cov*H' + R
+  // 残差协方差 S = H*Cov*H' + R
   Eigen::MatrixXd S(R.rows(), R.rows());
   S.triangularView<Eigen::Upper>() = H * P_small * H.transpose();
   S.triangularView<Eigen::Upper>() += R;
   // Eigen::MatrixXd S = H * P_small * H.transpose() + R;
 
-  // Invert our S (should we use a more stable method here??)
+  // 求解 S 的逆（这里是否应该用更稳定的方法？）
   Eigen::MatrixXd Sinv = Eigen::MatrixXd::Identity(R.rows(), R.rows());
   S.selfadjointView<Eigen::Upper>().llt().solveInPlace(Sinv);
+
+  // 计算卡尔曼增益 K = M*S^{-1}
   Eigen::MatrixXd K = M_a * Sinv.selfadjointView<Eigen::Upper>();
   // Eigen::MatrixXd K = M_a * S.inverse();
 
-  // Update Covariance
+  // 更新协方差 P_new = P - K*M_a^T
   state->_Cov.triangularView<Eigen::Upper>() -= K * M_a.transpose();
   state->_Cov = state->_Cov.selfadjointView<Eigen::Upper>();
   // Cov -= K * M_a.transpose();
   // Cov = 0.5*(Cov+Cov.transpose());
 
-  // We should check if we are not positive semi-definitate (i.e. negative diagionals is not s.p.d)
+  // 我们应该检查协方差矩阵是否为半正定（即对角线元素不能为负）
   Eigen::VectorXd diags = state->_Cov.diagonal();
   bool found_neg = false;
   for (int i = 0; i < diags.rows(); i++) {
@@ -181,14 +186,14 @@ void StateHelper::EKFUpdate(std::shared_ptr<State> state, const std::vector<std:
     std::exit(EXIT_FAILURE);
   }
 
-  // Calculate our delta and update all our active states
+  // 计算我们的增量并更新所有活动状态
   Eigen::VectorXd dx = K * res;
   for (size_t i = 0; i < state->_variables.size(); i++) {
     state->_variables.at(i)->update(dx.block(state->_variables.at(i)->id(), 0, state->_variables.at(i)->size(), 1));
   }
 
-  // If we are doing online intrinsic calibration we should update our camera objects
-  // NOTE: is this the best place to put this update logic??? probably..
+  // 如果我们正在进行在线内参标定，则应更新我们的相机对象
+  // NOTE：这是放置此更新逻辑的最佳位置吗？可能是的……
   if (state->_options.do_calib_camera_intrinsics) {
     for (auto const &calib : state->_cam_intrinsics) {
       state->_cam_intrinsics_cameras.at(calib.first)->set_value(calib.second->value());
@@ -578,28 +583,28 @@ void StateHelper::initialize_invertible(std::shared_ptr<State> state, std::share
 
 void StateHelper::augment_clone(std::shared_ptr<State> state, Eigen::Matrix<double, 3, 1> last_w) {
 
-  // We can't insert a clone that occured at the same timestamp!
+  // 如果当前时间戳已经存在克隆，则直接退出
   if (state->_clones_IMU.find(state->_timestamp) != state->_clones_IMU.end()) {
     PRINT_ERROR(RED "TRIED TO INSERT A CLONE AT THE SAME TIME AS AN EXISTING CLONE, EXITING!#!@#!@#\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
-  // Call on our cloner and add it to our vector of types
-  // NOTE: this will clone the clone pose to the END of the covariance...
+  // 调用克隆器进行克隆，并将其添加到类型向量中
+  // NOTE：这将把克隆姿势复制到协方差的末尾...
   std::shared_ptr<Type> posetemp = StateHelper::clone(state, state->_imu->pose());
 
-  // Cast to a JPL pose type, check if valid
+  // 将克隆转为 PoseJPL 类型
   std::shared_ptr<PoseJPL> pose = std::dynamic_pointer_cast<PoseJPL>(posetemp);
   if (pose == nullptr) {
     PRINT_ERROR(RED "INVALID OBJECT RETURNED FROM STATEHELPER CLONE, EXITING!#!@#!@#\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
-  // Append the new clone to our clone vector
+  // 将克隆添加到克隆映射向量中
   state->_clones_IMU[state->_timestamp] = pose;
 
-  // If we are doing time calibration, then our clones are a function of the time offset
-  // Logic is based on Mingyang Li and Anastasios I. Mourikis paper:
+  // 如果我们正在进行时间校准，那么我们的克隆就是时间偏移量的函数。
+  // 逻辑基于明阳李和阿纳斯塔西奥斯·I·穆里基斯的论文：
   // http://journals.sagepub.com/doi/pdf/10.1177/0278364913515286
   if (state->_options.do_calib_camera_timeoffset) {
     // Jacobian to augment by

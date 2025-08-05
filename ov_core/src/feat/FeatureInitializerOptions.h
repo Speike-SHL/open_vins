@@ -32,7 +32,7 @@ namespace ov_core {
  */
 struct FeatureInitializerOptions {
 
-  /// If we should perform 1d triangulation instead of 3d
+  /// 我们是否应该用了 1d 三角化代替 3d
   bool triangulate_1d = false;
 
   /// If we should perform Levenberg-Marquardt refinment

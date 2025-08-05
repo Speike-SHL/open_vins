@@ -32,14 +32,14 @@ using namespace ov_msckf;
 
 void Propagator::propagate_and_clone(std::shared_ptr<State> state, double timestamp) {
 
-  // If the difference between the current update time and state is zero
-  // We should crash, as this means we would have two clones at the same time!!!!
+  // 如果当前更新时间与状态时间的差为零
+  // 应该直接崩溃，因为这意味着会有两个克隆在同一时刻!!!!
   if (state->_timestamp == timestamp) {
     PRINT_ERROR(RED "Propagator::propagate_and_clone(): Propagation called again at same timestep at last update timestep!!!!\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
-  // We should crash if we are trying to propagate backwards
+  // 如果尝试向后传播，也应该崩溃
   if (state->_timestamp > timestamp) {
     PRINT_ERROR(RED "Propagator::propagate_and_clone(): Propagation called trying to propagate backwards in time!!!!\n" RESET);
     PRINT_ERROR(RED "Propagator::propagate_and_clone(): desired propagation = %.4f\n" RESET, (timestamp - state->_timestamp));
@@ -50,16 +50,16 @@ void Propagator::propagate_and_clone(std::shared_ptr<State> state, double timest
   //===================================================================================
   //===================================================================================
 
-  // Set the last time offset value if we have just started the system up
+  // 如果刚启动系统，则设置上一次时间偏移估计值
   if (!have_last_prop_time_offset) {
     last_prop_time_offset = state->_calib_dt_CAMtoIMU->value()(0);
     have_last_prop_time_offset = true;
   }
 
-  // Get what our IMU-camera offset should be (t_imu = t_cam + calib_dt)
+  // 获取当前 IMU-相机 的时间偏移最新估计值（t_imu = t_cam + calib_dt）
   double t_off_new = state->_calib_dt_CAMtoIMU->value()(0);
 
-  // First lets construct an IMU vector of measurements we need
+  // 选择上次state更新完成后（time0）到当前时间戳（time1）之间的IMU数据
   double time0 = state->_timestamp + last_prop_time_offset;
   double time1 = timestamp + t_off_new;
   std::vector<ov_core::ImuData> prop_data;
@@ -68,40 +68,42 @@ void Propagator::propagate_and_clone(std::shared_ptr<State> state, double timest
     prop_data = Propagator::select_imu_readings(imu_data, time0, time1);
   }
 
-  // We are going to sum up all the state transition matrices, so we can do a single large multiplication at the end
+  // 我们将累加所有的状态转移矩阵，这样最后可以只做一次大的乘法
   // Phi_summed = Phi_i*Phi_summed
   // Q_summed = Phi_i*Q_summed*Phi_i^T + Q_i
-  // After summing we can multiple the total phi to get the updated covariance
-  // We will then add the noise to the IMU portion of the state
+  // 累加后，我们可以用总的phi来更新协方差
+  // 然后将噪声加到状态中的IMU部分
   Eigen::MatrixXd Phi_summed = Eigen::MatrixXd::Identity(state->imu_intrinsic_size() + 15, state->imu_intrinsic_size() + 15);
   Eigen::MatrixXd Qd_summed = Eigen::MatrixXd::Zero(state->imu_intrinsic_size() + 15, state->imu_intrinsic_size() + 15);
   double dt_summed = 0;
 
-  // Loop through all IMU messages, and use them to move the state forward in time
-  // This uses the zero'th order quat, and then constant acceleration discrete
+  // 遍历所有 IMU 消息，并用它们将状态向前推进
+  // 这里使用零阶四元数和常加速度离散模型
+  // 只有 IMU 数据大于 1 时才进行
   if (prop_data.size() > 1) {
     for (size_t i = 0; i < prop_data.size() - 1; i++) {
 
-      // Get the next state Jacobian and noise Jacobian for this IMU reading
+      // 获取该 IMU 读数的下一个状态雅可比和噪声雅可比
       Eigen::MatrixXd F, Qdi;
       predict_and_compute(state, prop_data.at(i), prop_data.at(i + 1), F, Qdi);
 
-      // Next we should propagate our IMU covariance
+      // 接下来我们应该传播 IMU 协方差
       // Pii' = F*Pii*F.transpose() + G*Q*G.transpose()
-      // Pci' = F*Pci and Pic' = Pic*F.transpose()
-      // NOTE: Here we are summing the state transition F so we can do a single mutiplication later
-      // NOTE: Phi_summed = Phi_i*Phi_summed
-      // NOTE: Q_summed = Phi_i*Q_summed*Phi_i^T + G*Q_i*G^T
+      // Pci' = F*Pci，Pic' = Pic*F.transpose()
+      // 注意：这里我们累乘状态转移 F，这样最后可以只做一次乘法
+      // 注意：Phi_summed = Phi_i*Phi_summed
+      // 注意：Q_summed = Phi_i*Q_summed*Phi_i^T + G*Q_i*G^T
       Phi_summed = F * Phi_summed;
       Qd_summed = F * Qd_summed * F.transpose() + Qdi;
       Qd_summed = 0.5 * (Qd_summed + Qd_summed.transpose());
       dt_summed += prop_data.at(i + 1).timestamp - prop_data.at(i).timestamp;
     }
   }
+  // 验证总传播时间是否与预期相符
   assert(std::abs((time1 - time0) - dt_summed) < 1e-4);
 
-  // Last angular velocity (used for cloning when estimating time offset)
-  // Remember to correct them before we store them
+  // 最后一个角速度（用于在估计时间偏移时进行克隆）
+  // 记得在存储之前进行修正
   Eigen::Vector3d last_a = Eigen::Vector3d::Zero();
   Eigen::Vector3d last_w = Eigen::Vector3d::Zero();
   if (!prop_data.empty()) {
@@ -112,7 +114,7 @@ void Propagator::propagate_and_clone(std::shared_ptr<State> state, double timest
     last_w = state->_calib_imu_GYROtoIMU->Rot() * Dw * (prop_data.at(prop_data.size() - 1).wm - state->_imu->bias_g() - Tg * last_a);
   }
 
-  // Do the update to the covariance with our "summed" state transition and IMU noise addition...
+  // 用累积的状态转移矩阵和IMU噪声对协方差进行更新
   std::vector<std::shared_ptr<Type>> Phi_order;
   Phi_order.push_back(state->_imu);
   if (state->_options.do_calib_imu_intrinsics) {
@@ -129,27 +131,27 @@ void Propagator::propagate_and_clone(std::shared_ptr<State> state, double timest
   }
   StateHelper::EKFPropagation(state, Phi_order, Phi_order, Phi_summed, Qd_summed);
 
-  // Set timestamp data
+  // 设置时间戳数据
   state->_timestamp = timestamp;
   last_prop_time_offset = t_off_new;
 
-  // Now perform stochastic cloning
+  // 现在执行随机克隆
   StateHelper::augment_clone(state, last_w);
 }
 
 bool Propagator::fast_state_propagate(std::shared_ptr<State> state, double timestamp, Eigen::Matrix<double, 13, 1> &state_plus,
                                       Eigen::Matrix<double, 12, 12> &covariance) {
 
-  // First we will store the current calibration / estimates of the state
+  // 当标志位为 false 时，表示上次缓存的状态太老了已经不能用了（可能是刚进行了更新），所以需要重新缓存
   if (!cache_imu_valid) {
-    cache_state_time = state->_timestamp;
-    cache_state_est = state->_imu->value();
-    cache_state_covariance = StateHelper::get_marginal_covariance(state, {state->_imu});
-    cache_t_off = state->_calib_dt_CAMtoIMU->value()(0);
+    cache_state_time = state->_timestamp;                                                // 缓存时间
+    cache_state_est = state->_imu->value();                                              // 缓存估计的状态
+    cache_state_covariance = StateHelper::get_marginal_covariance(state, {state->_imu}); // 缓存与IMU相关的协方差
+    cache_t_off = state->_calib_dt_CAMtoIMU->value()(0);                                 // 缓存IMU与相机的时间偏移
     cache_imu_valid = true;
   }
 
-  // First lets construct an IMU vector of measurements we need
+  // 首先让我们构建一个需要的IMU测量向量
   double time0 = cache_state_time + cache_t_off;
   double time1 = timestamp + cache_t_off;
   std::vector<ov_core::ImuData> prop_data;
@@ -164,40 +166,40 @@ bool Propagator::fast_state_propagate(std::shared_ptr<State> state, double times
   Eigen::Vector3d bias_g = cache_state_est.block(10, 0, 3, 1);
   Eigen::Vector3d bias_a = cache_state_est.block(13, 0, 3, 1);
 
-  // IMU intrinsic calibration estimates (static)
+  // IMU 内部标定参数（静态）
   Eigen::Matrix3d Dw = State::Dm(state->_options.imu_model, state->_calib_imu_dw->value());
   Eigen::Matrix3d Da = State::Dm(state->_options.imu_model, state->_calib_imu_da->value());
   Eigen::Matrix3d Tg = State::Tg(state->_calib_imu_tg->value());
   Eigen::Matrix3d R_ACCtoIMU = state->_calib_imu_ACCtoIMU->Rot();
   Eigen::Matrix3d R_GYROtoIMU = state->_calib_imu_GYROtoIMU->Rot();
 
-  // Loop through all IMU messages, and use them to move the state forward in time
-  // This uses the zero'th order quat, and then constant acceleration discrete
+  // 遍历所有 IMU 数据，用它们将状态向前推进
+  // 这里使用零阶四元数和常加速度离散模型
   for (size_t i = 0; i < prop_data.size() - 1; i++) {
 
-    // Time elapsed over interval
+    // 当前区间的时间间隔
     auto data_minus = prop_data.at(i);
     auto data_plus = prop_data.at(i + 1);
     double dt = data_plus.timestamp - data_minus.timestamp;
 
-    // Corrected imu acc measurements with our current biases
+    // 用当前的偏置修正后的 IMU 加速度测量
     Eigen::Vector3d a_hat1 = R_ACCtoIMU * Da * (data_minus.am - bias_a);
     Eigen::Vector3d a_hat2 = R_ACCtoIMU * Da * (data_plus.am - bias_a);
     Eigen::Vector3d a_hat = 0.5 * (a_hat1 + a_hat2);
 
-    // Corrected imu gyro measurements with our current biases
+    // 用当前的偏置修正后的 IMU 角速度测量
     Eigen::Vector3d w_hat1 = R_GYROtoIMU * Dw * (data_minus.wm - bias_g - Tg * a_hat1);
     Eigen::Vector3d w_hat2 = R_GYROtoIMU * Dw * (data_plus.wm - bias_g - Tg * a_hat2);
     Eigen::Vector3d w_hat = 0.5 * (w_hat1 + w_hat2);
 
-    // Current state estimates
+    // 当前状态估计
     Eigen::Matrix3d R_Gtoi = quat_2_Rot(cache_state_est.block(0, 0, 4, 1));
     Eigen::Vector3d v_iinG = cache_state_est.block(7, 0, 3, 1);
     Eigen::Vector3d p_iinG = cache_state_est.block(4, 0, 3, 1);
 
-    // State transition and noise matrix
-    // TODO: should probably track the correlations with the IMU intrinsics if we are calibrating
-    // TODO: currently this just does a quick discrete prediction using only the previous marg IMU uncertainty
+    // 状态转移矩阵和噪声矩阵
+    // TODO: 如果在标定 IMU 内参，应该跟踪与 IMU 内参的相关性
+    // TODO: 当前仅使用之前的 IMU 边缘化不确定性做一个快速离散预测
     Eigen::Matrix<double, 15, 15> F = Eigen::Matrix<double, 15, 15>::Zero();
     F.block(0, 0, 3, 3) = exp_so3(-w_hat * dt);
     F.block(0, 9, 3, 3).noalias() = -exp_so3(-w_hat * dt) * Jr_so3(-w_hat * dt) * dt;
@@ -217,9 +219,9 @@ bool Propagator::fast_state_propagate(std::shared_ptr<State> state, double times
     G.block(9, 6, 3, 3).setIdentity();
     G.block(12, 9, 3, 3).setIdentity();
 
-    // Construct our discrete noise covariance matrix
-    // Note that we need to convert our continuous time noises to discrete
-    // Equations (129) amd (130) of Trawny tech report
+    // 构建离散噪声协方差矩阵
+    // 注意需要将连续时间噪声转换为离散时间
+    // 参考 Trawny 技术报告的公式 (129) 和 (130)
     Eigen::Matrix<double, 15, 15> Qd = Eigen::Matrix<double, 15, 15>::Zero();
     Eigen::Matrix<double, 12, 12> Qc = Eigen::Matrix<double, 12, 12>::Zero();
     Qc.block(0, 0, 3, 3) = _noises.sigma_w_2 / dt * Eigen::Matrix3d::Identity();
@@ -230,32 +232,32 @@ bool Propagator::fast_state_propagate(std::shared_ptr<State> state, double times
     Qd = 0.5 * (Qd + Qd.transpose());
     cache_state_covariance = F * cache_state_covariance * F.transpose() + Qd;
 
-    // Propagate the mean forward
+    // 推进均值
     cache_state_est.block(0, 0, 4, 1) = rot_2_quat(exp_so3(-w_hat * dt) * R_Gtoi);
     cache_state_est.block(4, 0, 3, 1) = p_iinG + v_iinG * dt + 0.5 * R_Gtoi.transpose() * a_hat * dt * dt - 0.5 * _gravity * dt * dt;
     cache_state_est.block(7, 0, 3, 1) = v_iinG + R_Gtoi.transpose() * a_hat * dt - _gravity * dt;
   }
 
-  // Move the time forward
-  // This time will now be in the IMU clock, so reset the toff to zero
+  // 将时间向前推进
+  // 现在时间已经在IMU时钟下，因此将toff重置为零
   cache_state_time = time1;
   cache_t_off = 0.0;
 
-  // Now record what the predicted state should be
+  // 记录预测的状态
   Eigen::Vector4d q_Gtoi = cache_state_est.block(0, 0, 4, 1);
   Eigen::Vector3d v_iinG = cache_state_est.block(7, 0, 3, 1);
   Eigen::Vector3d p_iinG = cache_state_est.block(4, 0, 3, 1);
   state_plus.setZero();
   state_plus.block(0, 0, 4, 1) = q_Gtoi;
   state_plus.block(4, 0, 3, 1) = p_iinG;
-  state_plus.block(7, 0, 3, 1) = quat_2_Rot(q_Gtoi) * v_iinG; // local frame v_iini
+  state_plus.block(7, 0, 3, 1) = quat_2_Rot(q_Gtoi) * v_iinG; // 局部坐标系下的速度 v_iini
   Eigen::Vector3d last_a = R_ACCtoIMU * Da * (prop_data.at(prop_data.size() - 1).am - bias_a);
   Eigen::Vector3d last_w = R_GYROtoIMU * Dw * (prop_data.at(prop_data.size() - 1).wm - bias_g - Tg * last_a);
   state_plus.block(10, 0, 3, 1) = last_w;
 
-  // Do a covariance propagation for our velocity (needs to be in local frame)
-  // TODO: more properly do the covariance of the angular velocity here...
-  // TODO: it should be dependent on the state bias, thus correlated with the pose..
+  // 对速度做协方差传播（需要在局部坐标系下）
+  // TODO: 更加合理地传播角速度的协方差...
+  // TODO: 它应该依赖于状态偏置，因此与位姿相关..
   covariance.setZero();
   Eigen::Matrix<double, 15, 15> Phi = Eigen::Matrix<double, 15, 15>::Identity();
   Phi.block(6, 6, 3, 3) = quat_2_Rot(q_Gtoi);
@@ -266,27 +268,26 @@ bool Propagator::fast_state_propagate(std::shared_ptr<State> state, double times
   return true;
 }
 
-std::vector<ov_core::ImuData> Propagator::select_imu_readings(const std::vector<ov_core::ImuData> &imu_data, double time0, double time1,
-                                                              bool warn) {
+std::vector<ov_core::ImuData> Propagator::select_imu_readings(const std::vector<ov_core::ImuData> &imu_data, 
+                                                              double time0, double time1, bool warn) {
 
-  // Our vector imu readings
+  // 存储选出的 IMU 数据
   std::vector<ov_core::ImuData> prop_data;
 
-  // Ensure we have some measurements in the first place!
+  // 确保我们至少有一些测量数据！
   if (imu_data.empty()) {
     if (warn)
       PRINT_WARNING(YELLOW "Propagator::select_imu_readings(): No IMU measurements. IMU-CAMERA are likely messed up!!!\n" RESET);
     return prop_data;
   }
 
-  // Loop through and find all the needed measurements to propagate with
-  // Note we split measurements based on the given state time, and the update timestamp
+  // 遍历并找到所有需要用于传播的测量数据
+  // 注意我们根据给定的状态时间和更新时间戳来分割测量数据
   for (size_t i = 0; i < imu_data.size() - 1; i++) {
 
-    // START OF THE INTEGRATION PERIOD
-    // If the next timestamp is greater then our current state time
-    // And the current is not greater then it yet...
-    // Then we should "split" our current IMU measurement
+    // 【区间开始部分】
+    // 如果  imu_data[i] < time0 < imu_data[i+1]
+    // 那么将 imu_data 插值到 time0 并获取数据
     if (imu_data.at(i + 1).timestamp > time0 && imu_data.at(i).timestamp < time0) {
       ov_core::ImuData data = Propagator::interpolate_data(imu_data.at(i), imu_data.at(i + 1), time0);
       prop_data.push_back(data);
@@ -295,42 +296,49 @@ std::vector<ov_core::ImuData> Propagator::select_imu_readings(const std::vector<
       continue;
     }
 
-    // MIDDLE OF INTEGRATION PERIOD
-    // If our imu measurement is right in the middle of our propagation period
-    // Then we should just append the whole measurement time to our propagation vector
+    // 【区间中间部分】
+    // 如果我们的IMU测量正好位于传播区间的中间
+    // 那么我们应该直接将整个测量加入到传播向量中
+    //  time0 <= imu_data[i] --- imu_data[i+1] <= time1
     if (imu_data.at(i).timestamp >= time0 && imu_data.at(i + 1).timestamp <= time1) {
       prop_data.push_back(imu_data.at(i));
       // PRINT_DEBUG("propagation #%d = CASE 2 = %.3f\n", (int)i, imu_data.at(i).timestamp - prop_data.at(0).timestamp);
       continue;
     }
 
-    // END OF THE INTEGRATION PERIOD
-    // If the current timestamp is greater then our update time
-    // We should just "split" the NEXT IMU measurement to the update time,
-    // NOTE: we add the current time, and then the time at the end of the interval (so we can get a dt)
-    // NOTE: we also break out of this loop, as this is the last IMU measurement we need!
+    // 【区间结束部分】
+    // 如果当前的时间戳大于我们的更新时间, 我们应该将下一个IMU测量“分割”到更新时间点，
+    // NOTE：我们添加当前的时间点，然后再添加区间结束时的时间点（这样我们可以获得一个dt）
+    // NOTE：我们还会跳出这个循环，因为这是我们需要的最后一个IMU测量！
+    // time1 < imu_data[i+1]
     if (imu_data.at(i + 1).timestamp > time1) {
-      // If we have a very low frequency IMU then, we could have only recorded the first integration (i.e. case 1) and nothing else
-      // In this case, both the current IMU measurement and the next is greater than the desired intepolation, thus we should just cut the
-      // current at the desired time Else, we have hit CASE2 and this IMU measurement is not past the desired propagation time, thus add the
-      // whole IMU reading
+      // 如果我们的IMU频率非常低，那么我们可能只记录了第一个积分（即情况1），没有其他的
+      // 在这种情况下，当前的IMU测量和下一个都大于所需的插值时间，因此我们应该直接在所需时间点截断当前测量
+      // 否则，我们遇到了情况2，此时该IMU测量还没有超过所需的传播时间，因此应当加入整个IMU读数
+      // time1 < imu_data[0] < imu_data[1]
       if (imu_data.at(i).timestamp > time1 && i == 0) {
-        // This case can happen if we don't have any imu data that has occured before the startup time
-        // This means that either we have dropped IMU data, or we have not gotten enough.
-        // In this case we can't propgate forward in time, so there is not that much we can do.
+        // 如果在启动时间之前没有任何 IMU 数据，这种情况可能会发生
+        // 这意味着我们要么丢失了IMU数据，要么还没有收到足够的数据。
+        // 在这种情况下，我们无法向前传播时间，因此也没有太多可以做的。
+        // NOTE：因为 time1 实际上为最新相机帧的时间戳，这说明这帧图像前面没有 IMU 数据
         break;
-      } else if (imu_data.at(i).timestamp > time1) {
+      }
+      // time1 < imu_data[i] < imu_data[i+1]
+      else if (imu_data.at(i).timestamp > time1) {
+        // 利用 imu_data[i-1] < time1 < imu_data[i] 插值出 time1 的 IMU 数据
         ov_core::ImuData data = interpolate_data(imu_data.at(i - 1), imu_data.at(i), time1);
         prop_data.push_back(data);
         // PRINT_DEBUG("propagation #%d = CASE 3.1 = %.3f => %.3f\n", (int)i, imu_data.at(i).timestamp - prop_data.at(0).timestamp,
         //             imu_data.at(i).timestamp - time0);
-      } else {
+      }
+      // imu_data[i] < time1 < imu_data[i+1]
+      else {
         prop_data.push_back(imu_data.at(i));
         // PRINT_DEBUG("propagation #%d = CASE 3.2 = %.3f => %.3f\n", (int)i, imu_data.at(i).timestamp - prop_data.at(0).timestamp,
         //             imu_data.at(i).timestamp - time0);
       }
-      // If the added IMU message doesn't end exactly at the camera time
-      // Then we need to add another one that is right at the ending time
+      // 如果添加的IMU消息并没有正好在相机时间点结束
+      // 那么我们需要再添加一个正好在结束时间点的IMU数据
       if (prop_data.at(prop_data.size() - 1).timestamp != time1) {
         ov_core::ImuData data = interpolate_data(imu_data.at(i), imu_data.at(i + 1), time1);
         prop_data.push_back(data);
@@ -341,23 +349,21 @@ std::vector<ov_core::ImuData> Propagator::select_imu_readings(const std::vector<
     }
   }
 
-  // Check that we have at least one measurement to propagate with
+  // 检查是否至少有一个测量可用于传播
   if (prop_data.empty()) {
     if (warn)
-      PRINT_WARNING(
-          YELLOW
-          "Propagator::select_imu_readings(): No IMU measurements to propagate with (%d of 2). IMU-CAMERA are likely messed up!!!\n" RESET,
-          (int)prop_data.size());
+      PRINT_WARNING(YELLOW "Propagator::select_imu_readings(): 没有可用于传播的IMU测量（%d of 2）。IMU-CAMERA 很可能不同步!!!\n" RESET,
+                    (int)prop_data.size());
     return prop_data;
   }
 
-  // If we did not reach the whole integration period
-  // (i.e., the last inertial measurement we have is smaller then the time we want to reach)
-  // Then we should just "stretch" the last measurement to be the whole period
-  // TODO: this really isn't that good of logic, we should fix this so the above logic is exact!
+  // 如果我们没有覆盖整个积分区间
+  // （即我们拥有的最后一个惯性测量小于我们想要到达的时间）
+  // 那么我们应该“拉伸”最后一个测量以覆盖整个区间
+  // TODO: 这个逻辑其实并不太好，应该完善上面的逻辑使其更精确！
   if (prop_data.at(prop_data.size() - 1).timestamp != time1) {
     if (warn)
-      PRINT_DEBUG(YELLOW "Propagator::select_imu_readings(): Missing inertial measurements to propagate with (%f sec missing)!\n" RESET,
+      PRINT_DEBUG(YELLOW "Propagator::select_imu_readings(): 缺少用于传播的惯性测量（缺少 %f 秒）!\n" RESET,
                   (time1 - imu_data.at(imu_data.size() - 1).timestamp));
     ov_core::ImuData data = interpolate_data(imu_data.at(imu_data.size() - 2), imu_data.at(imu_data.size() - 1), time1);
     prop_data.push_back(data);
@@ -365,20 +371,19 @@ std::vector<ov_core::ImuData> Propagator::select_imu_readings(const std::vector<
     // data.timestamp - time0);
   }
 
-  // Loop through and ensure we do not have any zero dt values
-  // This would cause the noise covariance to be Infinity
-  // TODO: we should actually fix this by properly implementing this function and doing unit tests on it...
+  // 遍历并确保没有任何零dt的情况
+  // 这会导致噪声协方差为无穷大
+  // TODO: 实际上应该通过完善该函数并进行单元测试来彻底修复...
   for (size_t i = 0; i < prop_data.size() - 1; i++) {
     if (std::abs(prop_data.at(i + 1).timestamp - prop_data.at(i).timestamp) < 1e-12) {
       if (warn)
-        PRINT_WARNING(YELLOW "Propagator::select_imu_readings(): Zero DT between IMU reading %d and %d, removing it!\n" RESET, (int)i,
-                      (int)(i + 1));
+        PRINT_WARNING(YELLOW "Propagator::select_imu_readings(): IMU测量%d和%d之间的时间间隔为零，已移除！\n" RESET, (int)i, (int)(i + 1));
       prop_data.erase(prop_data.begin() + i);
       i--;
     }
   }
 
-  // Check that we have at least one measurement to propagate with
+  // 检查是否至少有一个测量可用于传播
   if (prop_data.size() < 2) {
     if (warn)
       PRINT_WARNING(

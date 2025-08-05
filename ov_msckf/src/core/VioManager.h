@@ -53,82 +53,86 @@ class UpdaterZeroVelocity;
 class Propagator;
 
 /**
- * @brief Core class that manages the entire system
+ * @brief 管理整个系统的核心类
  *
- * This class contains the state and other algorithms needed for the MSCKF to work.
- * We feed in measurements into this class and send them to their respective algorithms.
- * If we have measurements to propagate or update with, this class will call on our state to do that.
+ * 该类包含了 MSCKF 工作所需的状态和其他算法。
+ * 我们将测量数据输入到该类，并将其发送到相应的算法中。
+ * 如果有需要传播或更新的测量数据，该类会调用我们的状态进行处理。
  */
 class VioManager {
 
 public:
   /**
-   * @brief Default constructor, will load all configuration variables
-   * @param params_ Parameters loaded from either ROS or CMDLINE
+   * @brief 默认构造函数，将加载所有配置变量。
+   *
+   * 初始化视觉-惯性里程计（VIO）系统的核心管理器，
+   * 加载配置参数并构建所有必要的算法模块（如状态估计器、特征跟踪器、初始化器等）。
+   *
+   * @param params_ 从 ROS 或命令行加载的参数
    */
   VioManager(VioManagerOptions &params_);
 
   /**
-   * @brief Feed function for inertial data
-   * @param message Contains our timestamp and inertial information
+   * @brief 用于输入惯性数据的函数
+   * @param message 包含时间戳和惯性信息
    */
   void feed_measurement_imu(const ov_core::ImuData &message);
 
   /**
-   * @brief Feed function for camera measurements
-   * @param message Contains our timestamp, images, and camera ids
+   * @brief 用于输入相机测量数据的函数
+   * @param message 包含时间戳、图像和相机ID的信息
    */
   void feed_measurement_camera(const ov_core::CameraData &message) { track_image_and_update(message); }
 
   /**
-   * @brief Feed function for a synchronized simulated cameras
-   * @param timestamp Time that this image was collected
-   * @param camids Camera ids that we have simulated measurements for
-   * @param feats Raw uv simulated measurements
+   * @brief 用于同步模拟相机的输入函数
+   * @param timestamp 该图像采集的时间
+   * @param camids 我们拥有模拟测量的相机ID
+   * @param feats 原始的uv模拟测量值
    */
   void feed_measurement_simulation(double timestamp, const std::vector<int> &camids,
                                    const std::vector<std::vector<std::pair<size_t, Eigen::VectorXf>>> &feats);
 
   /**
-   * @brief Given a state, this will initialize our IMU state.
-   * @param imustate State in the MSCKF ordering: [time(sec),q_GtoI,p_IinG,v_IinG,b_gyro,b_accel]
+   * @brief 给定一个状态，将初始化我们的IMU状态。
+   * @param imustate MSCKF顺序的状态: [time(sec),q_GtoI,p_IinG,v_IinG,b_gyro,b_accel]
    */
   void initialize_with_gt(Eigen::Matrix<double, 17, 1> imustate);
 
-  /// If we are initialized or not
+  /// 是否已经初始化
   bool initialized() { return is_initialized_vio && timelastupdate != -1; }
 
-  /// Timestamp that the system was initialized at
+  /// 系统初始化时的时间戳
   double initialized_time() { return startup_time; }
 
-  /// Accessor for current system parameters
+  /// 获取当前系统参数
   VioManagerOptions get_params() { return params; }
 
-  /// Accessor to get the current state
+  /// 获取当前状态
   std::shared_ptr<State> get_state() { return state; }
 
-  /// Accessor to get the current propagator
+  /// 获取当前状态传播器
   std::shared_ptr<Propagator> get_propagator() { return propagator; }
 
-  /// Get a nice visualization image of what tracks we have
+  /// 获取当前跟踪特征的可视化图像
   cv::Mat get_historical_viz_image();
 
-  /// Returns 3d SLAM features in the global frame
+  /// 返回全局坐标系下的三维SLAM特征点
   std::vector<Eigen::Vector3d> get_features_SLAM();
 
-  /// Returns 3d ARUCO features in the global frame
+  /// 返回全局坐标系下的三维ARUCO特征点
   std::vector<Eigen::Vector3d> get_features_ARUCO();
 
-  /// Returns 3d features used in the last update in global frame
+  /// 返回上次更新中使用的全局三维特征点
   std::vector<Eigen::Vector3d> get_good_features_MSCKF() { return good_features_MSCKF; }
 
-  /// Return the image used when projecting the active tracks
+  /// 返回用于投影当前活动特征的图像
   void get_active_image(double &timestamp, cv::Mat &image) {
     timestamp = active_tracks_time;
     image = active_image;
   }
 
-  /// Returns active tracked features in the current frame
+  /// 返回当前帧中被跟踪的活动特征点
   void get_active_tracks(double &timestamp, std::unordered_map<size_t, Eigen::Vector3d> &feat_posinG,
                          std::unordered_map<size_t, Eigen::Vector3d> &feat_tracks_uvd) {
     timestamp = active_tracks_time;
@@ -138,102 +142,102 @@ public:
 
 protected:
   /**
-   * @brief Given a new set of camera images, this will track them.
+   * @brief 给定一组新的相机图像，将对其进行特征跟踪。
    *
-   * If we are having stereo tracking, we should call stereo tracking functions.
-   * Otherwise we will try to track on each of the images passed.
+   * 如果是双目跟踪，则调用双目跟踪函数。
+   * 否则，将对传入的每一张图像分别进行特征跟踪。
    *
-   * @param message Contains our timestamp, images, and camera ids
+   * @param message 包含时间戳、图像和相机ID的信息
    */
   void track_image_and_update(const ov_core::CameraData &message);
 
   /**
-   * @brief This will do the propagation and feature updates to the state
-   * @param message Contains our timestamp, images, and camera ids
+   * @brief 该函数将对状态进行传播和特征更新
+   * @param message 包含时间戳、图像和相机ID的信息
    */
   void do_feature_propagate_update(const ov_core::CameraData &message);
 
   /**
-   * @brief This function will try to initialize the state.
+   * @brief 此函数将尝试初始化状态。
    *
-   * This should call on our initializer and try to init the state.
-   * In the future we should call the structure-from-motion code from here.
-   * This function could also be repurposed to re-initialize the system after failure.
+   * 该函数应调用我们的初始化器并尝试初始化状态。
+   * 未来我们应该在这里调用结构光束法（structure-from-motion）代码。
+   * 此函数也可以用于系统失效后的重新初始化。
    *
-   * @param message Contains our timestamp, images, and camera ids
-   * @return True if we have successfully initialized
+   * @param message 包含时间戳、图像和相机ID的信息
+   * @return 如果成功初始化则返回true
    */
   bool try_to_initialize(const ov_core::CameraData &message);
 
   /**
-   * @brief This function will will re-triangulate all features in the current frame
+   * @brief 此函数将对当前帧中的所有特征点进行重新三角化
    *
-   * For all features that are currently being tracked by the system, this will re-triangulate them.
-   * This is useful for downstream applications which need the current pointcloud of points (e.g. loop closure).
-   * This will try to triangulate *all* points, not just ones that have been used in the update.
+   * 对于系统当前正在跟踪的所有特征点，将对它们进行重新三角化。
+   * 这对于需要当前点云的下游应用（如回环检测）非常有用。
+   * 该函数会尝试对*所有*点进行三角化，而不仅仅是那些在更新中使用过的点。
    *
-   * @param message Contains our timestamp, images, and camera ids
+   * @param message 包含时间戳、图像和相机ID的信息
    */
   void retriangulate_active_tracks(const ov_core::CameraData &message);
 
-  /// Manager parameters
+  /// 管理器参数
   VioManagerOptions params;
 
-  /// Our master state object :D
+  /// 主状态对象
   std::shared_ptr<State> state;
 
-  /// Propagator of our state
+  /// 状态传播器
   std::shared_ptr<Propagator> propagator;
 
-  /// Our sparse feature tracker (klt or descriptor)
+  /// 稀疏特征跟踪器（KLT或描述子）
   std::shared_ptr<ov_core::TrackBase> trackFEATS;
 
-  /// Our aruoc tracker
+  /// ARUCO跟踪器
   std::shared_ptr<ov_core::TrackBase> trackARUCO;
 
-  /// State initializer
+  /// 状态初始化器
   std::shared_ptr<ov_init::InertialInitializer> initializer;
 
-  /// Boolean if we are initialized or not
+  /// 是否已经初始化
   bool is_initialized_vio = false;
 
-  /// Our MSCKF feature updater
+  /// MSCKF特征更新器
   std::shared_ptr<UpdaterMSCKF> updaterMSCKF;
 
-  /// Our SLAM/ARUCO feature updater
+  /// SLAM/ARUCO特征更新器
   std::shared_ptr<UpdaterSLAM> updaterSLAM;
 
-  /// Our zero velocity tracker
+  /// 零速更新器
   std::shared_ptr<UpdaterZeroVelocity> updaterZUPT;
 
-  /// This is the queue of measurement times that have come in since we starting doing initialization
-  /// After we initialize, we will want to prop & update to the latest timestamp quickly
+  /// 这是自开始初始化以来收到的测量时间队列
+  /// 初始化后，我们希望能够快速传播和更新到最新的时间戳
   std::vector<double> camera_queue_init;
   std::mutex camera_queue_init_mtx;
 
-  // Timing statistic file and variables
+  // 统计文件和相关变量
   std::ofstream of_statistics;
   boost::posix_time::ptime rT1, rT2, rT3, rT4, rT5, rT6, rT7;
 
-  // Track how much distance we have traveled
+  // 跟踪我们已经行进的距离
   double timelastupdate = -1;
   double distance = 0;
 
-  // Startup time of the filter
+  // 滤波器的启动时间
   double startup_time = -1;
 
-  // Threads and their atomics
+  // 线程及其原子变量
   std::atomic<bool> thread_init_running, thread_init_success;
 
-  // If we did a zero velocity update
+  // 是否进行了零速更新
   bool did_zupt_update = false;
   bool has_moved_since_zupt = false;
 
-  // Good features that where used in the last update (used in visualization)
+  // 上次更新中使用的优秀特征点（用于可视化）
   std::vector<Eigen::Vector3d> good_features_MSCKF;
 
-  // Re-triangulated features 3d positions seen from the current frame (used in visualization)
-  // For each feature we have a linear system A * p_FinG = b we create and increment their costs
+  // 从当前帧中看到的重新三角特征3d位置（用于可视化）
+  // 对于每个特征，我们有一个线性系统A*p_FinG=b，我们创建并增加它们的成本
   double active_tracks_time = -1;
   std::unordered_map<size_t, Eigen::Vector3d> active_tracks_posinG;
   std::unordered_map<size_t, Eigen::Vector3d> active_tracks_uvd;

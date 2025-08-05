@@ -28,64 +28,60 @@
 namespace ov_type {
 
 /**
- * @brief Base class for estimated variables.
+ * @brief 估计变量的基类
  *
- * This class is used how variables are represented or updated (e.g., vectors or quaternions).
- * Each variable is defined by its error state size and its location in the covariance matrix.
- * We additionally require all sub-types to have a update procedure.
+ * 该类用于定义变量的表示和更新方式（例如向量或四元数）。
+ * 每个变量由其误差状态大小（error state size）和在协方差矩阵中的位置决定。
+ * 我们还要求所有子类型必须实现更新过程（update procedure）。
  */
 class Type {
 
 public:
   /**
-   * @brief Default constructor for our Type
-   *
-   * @param size_ degrees of freedom of variable (i.e., the size of the error state)
+   * @brief Type 的默认构造函数
+   * @param size_ 变量的自由度（即误差状态的大小）
    */
   Type(int size_) { _size = size_; }
 
-  virtual ~Type(){};
+  virtual ~Type() {};
 
   /**
-   * @brief Sets id used to track location of variable in the filter covariance
-   *
-   * Note that the minimum ID is -1 which says that the state is not in our covariance.
-   * If the ID is larger than -1 then this is the index location in the covariance matrix.
-   *
-   * @param new_id entry in filter covariance corresponding to this variable
+   * @brief 设置用于跟踪变量在滤波器协方差中的位置的id
+   * 注意，最小ID为-1，表示该状态不在我们的协方差中。
+   * 如果ID大于-1，则表示这是协方差矩阵中的索引位置。
+   * @param new_id 与该变量对应的滤波器协方差中的条目
    */
   virtual void set_local_id(int new_id) { _id = new_id; }
 
   /**
-   * @brief Access to variable id (i.e. its location in the covariance)
+   * @brief 访问变量的id（即其在协方差中的位置）
    */
   int id() { return _id; }
 
   /**
-   * @brief Access to variable size (i.e. its error state size)
+   * @brief 访问变量的大小（即其误差状态的大小）
    */
   int size() { return _size; }
 
   /**
-   * @brief Update variable due to perturbation of error state
-   *
-   * @param dx Perturbation used to update the variable through a defined "boxplus" operation
+   * @brief 由于误差状态的扰动而更新变量
+   * @param dx 用于通过定义的“boxplus”操作更新变量的扰动量
    */
   virtual void update(const Eigen::VectorXd &dx) = 0;
 
   /**
-   * @brief Access variable's estimate
+   * @brief 访问变量的估计值
    */
   virtual const Eigen::MatrixXd &value() const { return _value; }
 
   /**
-   * @brief Access variable's first-estimate
+   * @brief 访问变量的首次估计值
    */
   virtual const Eigen::MatrixXd &fej() const { return _fej; }
 
   /**
-   * @brief Overwrite value of state's estimate
-   * @param new_value New value that will overwrite state's value
+   * @brief 覆盖状态估计值
+   * @param new_value 用于覆盖状态估计值的新值
    */
   virtual void set_value(const Eigen::MatrixXd &new_value) {
     assert(_value.rows() == new_value.rows());
@@ -94,8 +90,8 @@ public:
   }
 
   /**
-   * @brief Overwrite value of first-estimate
-   * @param new_value New value that will overwrite state's fej
+   * @brief 覆盖首次估计值
+   * @param new_value 用于覆盖状态首次估计值的新值
    */
   virtual void set_fej(const Eigen::MatrixXd &new_value) {
     assert(_fej.rows() == new_value.rows());
@@ -104,31 +100,32 @@ public:
   }
 
   /**
-   * @brief Create a clone of this variable
+   * @brief 创建该变量的克隆
    */
   virtual std::shared_ptr<Type> clone() = 0;
 
   /**
-   * @brief Determine if pass variable is a sub-variable
+   * @brief 判断传入的变量是否为子变量
    *
-   * If the passed variable is a sub-variable or the current variable this will return it.
-   * Otherwise it will return a nullptr, meaning that it was unable to be found.
+   * 如果传入的变量是当前变量的子变量或当前变量本身，则返回该变量。
+   * 否则返回nullptr，表示未找到该变量。
    *
-   * @param check Type pointer to compare our subvariables to
+   * @param check 用于与我们的子变量进行比较的Type指针
+   * @note 因为PoseJPL类中包含了JPLQuat和Vec子变量，IMU类中包含了更多
    */
   virtual std::shared_ptr<Type> check_if_subvariable(const std::shared_ptr<Type> check) { return nullptr; }
 
 protected:
-  /// First-estimate
+  /// 状态量的首次估计值
   Eigen::MatrixXd _fej;
 
-  /// Current best estimate
+  /// 状态量的当前估计值
   Eigen::MatrixXd _value;
 
   /// Location of error state in covariance
   int _id = -1;
 
-  /// Dimension of error state
+  /// 误差状态的维度
   int _size = -1;
 };
 

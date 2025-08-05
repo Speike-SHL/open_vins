@@ -31,9 +31,9 @@
 namespace ov_core {
 
 /**
- * @brief Printer for open_vins that allows for various levels of printing to be done
+ * @brief open_vins 的打印器，允许进行不同级别的打印输出
  *
- * To set the global verbosity level one can do the following:
+ * 设置全局详细程度的方法如下：
  * @code{.cpp}
  * ov_core::Printer::setPrintLevel("WARNING");
  * ov_core::Printer::setPrintLevel(ov_core::Printer::PrintLevel::WARNING);
@@ -42,56 +42,56 @@ namespace ov_core {
 class Printer {
 public:
   /**
-   * @brief The different print levels possible
+   * @brief 可用的不同打印级别
    *
-   * - PrintLevel::ALL : All PRINT_XXXX will output to the console
-   * - PrintLevel::DEBUG : "DEBUG", "INFO", "WARNING" and "ERROR" will be printed. "ALL" will be silenced
-   * - PrintLevel::INFO : "INFO", "WARNING" and "ERROR" will be printed. "ALL" and "DEBUG" will be silenced
-   * - PrintLevel::WARNING : "WARNING" and "ERROR" will be printed. "ALL", "DEBUG" and "INFO" will be silenced
-   * - PrintLevel::ERROR : Only "ERROR" will be printed. All the rest are silenced
-   * - PrintLevel::SILENT : All PRINT_XXXX will be silenced.
+   * - PrintLevel::ALL : 所有 PRINT_XXXX 都会输出到控制台
+   * - PrintLevel::DEBUG : 会打印 "DEBUG"、"INFO"、"WARNING" 和 "ERROR"。 "ALL" 会被屏蔽
+   * - PrintLevel::INFO : 会打印 "INFO"、"WARNING" 和 "ERROR"。 "ALL" 和 "DEBUG" 会被屏蔽
+   * - PrintLevel::WARNING : 只会打印 "WARNING" 和 "ERROR"。 "ALL"、"DEBUG" 和 "INFO" 会被屏蔽
+   * - PrintLevel::ERROR : 只会打印 "ERROR"。其他全部屏蔽
+   * - PrintLevel::SILENT : 所有 PRINT_XXXX 都会被屏蔽
    */
   enum PrintLevel { ALL = 0, DEBUG = 1, INFO = 2, WARNING = 3, ERROR = 4, SILENT = 5 };
 
   /**
-   * @brief Set the print level to use for all future printing to stdout.
-   * @param level The debug level to use
+   * @brief 设置所有后续标准输出的打印级别
+   * @param level 要使用的调试级别
    */
   static void setPrintLevel(const std::string &level);
 
   /**
-   * @brief Set the print level to use for all future printing to stdout.
-   * @param level The debug level to use
+   * @brief 设置所有后续标准输出的打印级别
+   * @param level 要使用的调试级别
    */
   static void setPrintLevel(PrintLevel level);
 
   /**
-   * @brief The print function that prints to stdout.
-   * @param level the print level for this print call
-   * @param location the location the print was made from
-   * @param line the line the print was made from
-   * @param format The printf format
+   * @brief 打印到标准输出的函数
+   * @param level 此次打印调用的级别
+   * @param location 打印发生的位置
+   * @param line 打印发生的行号
+   * @param format printf 格式
    */
   static void debugPrint(PrintLevel level, const char location[], const char line[], const char *format, ...);
 
-  /// The current print level
+  /// 当前的打印级别
   static PrintLevel current_print_level;
 
 private:
-  /// The max length for the file path.  This is to avoid very long file paths from
+  /// 文件路径的最大长度。用于避免非常长的文件路径
   static constexpr uint32_t MAX_FILE_PATH_LEGTH = 30;
 };
 
 } /* namespace ov_core */
 
 /*
- * Converts anything to a string
+ * 将任意内容转换为字符串
  */
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
 /*
- * The different Types of print levels
+ * 不同类型的打印级别
  */
 #define PRINT_ALL(x...) ov_core::Printer::debugPrint(ov_core::Printer::PrintLevel::ALL, __FILE__, TOSTRING(__LINE__), x);
 #define PRINT_DEBUG(x...) ov_core::Printer::debugPrint(ov_core::Printer::PrintLevel::DEBUG, __FILE__, TOSTRING(__LINE__), x);

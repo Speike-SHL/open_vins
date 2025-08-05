@@ -27,7 +27,7 @@
 namespace ov_type {
 
 /**
- * @brief Derived Type class that implements vector variables
+ * @brief 实现向量变量的派生 Type 类
  */
 class Vec : public Type {
 
@@ -44,13 +44,13 @@ public:
   ~Vec() {}
 
   /**
-   * @brief Implements the update operation through standard vector addition
+   * @brief 通过标准向量加法实现更新操作
    *
    * \f{align*}{
    * \mathbf{v} &= \hat{\mathbf{v}} + \tilde{\mathbf{v}}_{dx}
    * \f}
    *
-   * @param dx Additive error state correction
+   * @param dx 加性误差状态修正量
    */
   void update(const Eigen::VectorXd &dx) override {
     assert(dx.rows() == _size);

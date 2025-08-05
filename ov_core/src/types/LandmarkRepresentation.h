@@ -34,6 +34,7 @@ class LandmarkRepresentation {
 public:
   /**
    * @brief What feature representation our state can use
+   * https://docs.openvins.com/update-feat.html#feat-rep
    */
   enum Representation {
     GLOBAL_3D,
@@ -90,9 +91,9 @@ public:
   }
 
   /**
-   * @brief Helper function that checks if the passed feature representation is a relative or global
-   * @param feat_representation Representation we want to check
-   * @return True if it is a relative representation
+   * @brief 辅助函数，用于检查传入的特征表示是相对的还是全局的。
+   * @param feat_representation 需要检查的特征表示方式
+   * @return 如果是相对表示则返回true (即ANCHORED表示)
    */
   static inline bool is_relative_representation(Representation feat_representation) {
     return (feat_representation == Representation::ANCHORED_3D || feat_representation == Representation::ANCHORED_FULL_INVERSE_DEPTH ||

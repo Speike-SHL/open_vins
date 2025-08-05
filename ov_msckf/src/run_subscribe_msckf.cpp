@@ -45,7 +45,7 @@ std::shared_ptr<ROS2Visualizer> viz;
 // Main function
 int main(int argc, char **argv) {
 
-  // Ensure we have a path, if the user passes it then we should use it
+  // 确保我们有一个路径，如果用户传递了它，那么我们应该使用它。
   std::string config_path = "unset_path_to_config.yaml";
   if (argc > 1) {
     config_path = argv[1];
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   auto nh = std::make_shared<ros::NodeHandle>("~");
   nh->param<std::string>("config_path", config_path, config_path);
 #elif ROS_AVAILABLE == 2
-  // Launch our ros node
+  // 启动我们的 ROS2 节点
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
   options.allow_undeclared_parameters(true);
@@ -71,28 +71,28 @@ int main(int argc, char **argv) {
 #if ROS_AVAILABLE == 1
   parser->set_node_handler(nh);
 #elif ROS_AVAILABLE == 2
-  parser->set_node(node);
+  parser->set_node(node); // 将解析器绑定到ROS2节点，支持从ROS2参数覆盖文件中的值
 #endif
 
-  // Verbosity
+  // 日志级别
   std::string verbosity = "DEBUG";
   parser->parse_config("verbosity", verbosity);
   ov_core::Printer::setPrintLevel(verbosity);
 
-  // Create our VIO system
+  // VIO系统初始化
   VioManagerOptions params;
-  params.print_and_load(parser);
-  params.use_multi_threading_subs = true;
-  sys = std::make_shared<VioManager>(params);
+  params.print_and_load(parser);              // 从解析器加载参数值
+  params.use_multi_threading_subs = true;     // 使用多线程订阅
+  sys = std::make_shared<VioManager>(params); // 创建VIO系统
 #if ROS_AVAILABLE == 1
   viz = std::make_shared<ROS1Visualizer>(nh, sys);
   viz->setup_subscribers(parser);
 #elif ROS_AVAILABLE == 2
-  viz = std::make_shared<ROS2Visualizer>(node, sys);
-  viz->setup_subscribers(parser);
+  viz = std::make_shared<ROS2Visualizer>(node, sys); // 创建ROS2可视化器
+  viz->setup_subscribers(parser);                    // INFO 设置订阅者
 #endif
 
-  // Ensure we read in all parameters required
+  // 确保我们读取所需的所有参数
   if (!parser->successful()) {
     PRINT_ERROR(RED "unable to parse all parameters, please fix\n" RESET);
     std::exit(EXIT_FAILURE);
@@ -107,6 +107,7 @@ int main(int argc, char **argv) {
   ros::waitForShutdown();
 #elif ROS_AVAILABLE == 2
   // rclcpp::spin(node);
+  // 让这个节点中的多个话题的数据可以并行处理
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node);
   executor.spin();

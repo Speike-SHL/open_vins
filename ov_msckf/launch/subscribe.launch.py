@@ -9,12 +9,8 @@ import sys
 
 launch_args = [
     DeclareLaunchArgument(name="namespace", default_value="ov_msckf", description="namespace"),
-    DeclareLaunchArgument(
-        name="ov_enable", default_value="true", description="enable OpenVINS node"
-    ),
-    DeclareLaunchArgument(
-        name="rviz_enable", default_value="false", description="enable rviz node"
-    ),
+    DeclareLaunchArgument(name="ov_enable", default_value="true", description="enable OpenVINS node"),
+    DeclareLaunchArgument(name="rviz_enable", default_value="true", description="enable rviz node"),
     DeclareLaunchArgument(
         name="config",
         default_value="euroc_mav",
@@ -27,7 +23,7 @@ launch_args = [
     ),
     DeclareLaunchArgument(
         name="verbosity",
-        default_value="INFO",
+        default_value="ALL",
         description="ALL, DEBUG, INFO, WARNING, ERROR, SILENT",
     ),
     DeclareLaunchArgument(
@@ -44,8 +40,9 @@ launch_args = [
         name="save_total_state",
         default_value="false",
         description="record the total state with calibration and features to a txt file",
-    )
+    ),
 ]
+
 
 def launch_setup(context):
     config_path = LaunchConfiguration("config_path").perform(context)
@@ -55,9 +52,8 @@ def launch_setup(context):
         config = LaunchConfiguration("config").perform(context)
         if config in available_configs:
             config_path = os.path.join(
-                            get_package_share_directory("ov_msckf"),
-                            "config",config,"estimator_config.yaml"
-                        )
+                get_package_share_directory("ov_msckf"), "config", config, "estimator_config.yaml"
+            )
         else:
             return [
                 LogInfo(
@@ -70,16 +66,15 @@ def launch_setup(context):
         if not os.path.isfile(config_path):
             return [
                 LogInfo(
-                    msg="ERROR: config_path file: '{}' - does not exist. - not starting OpenVINS".format(
-                        config_path)
-                    )
+                    msg="ERROR: config_path file: '{}' - does not exist. - not starting OpenVINS".format(config_path)
+                )
             ]
     node1 = Node(
         package="ov_msckf",
         executable="run_subscribe_msckf",
         condition=IfCondition(LaunchConfiguration("ov_enable")),
         namespace=LaunchConfiguration("namespace"),
-        output='screen',
+        output="screen",
         parameters=[
             {"verbosity": LaunchConfiguration("verbosity")},
             {"use_stereo": LaunchConfiguration("use_stereo")},
@@ -94,14 +89,11 @@ def launch_setup(context):
         executable="rviz2",
         condition=IfCondition(LaunchConfiguration("rviz_enable")),
         arguments=[
-            "-d"
-            + os.path.join(
-                get_package_share_directory("ov_msckf"), "launch", "display_ros2.rviz"
-            ),
+            "-d" + os.path.join(get_package_share_directory("ov_msckf"), "launch", "display_ros2.rviz"),
             "--ros-args",
             "--log-level",
             "warn",
-            ],
+        ],
     )
 
     return [node1, node2]

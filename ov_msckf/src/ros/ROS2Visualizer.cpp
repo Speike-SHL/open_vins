@@ -165,7 +165,7 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
   // We need a valid parser
   assert(parser != nullptr);
 
-  // Create imu subscriber (handle legacy ros param info)
+  // 创建 IMU 订阅者（兼容旧版 ROS 参数信息）
   std::string topic_imu;
   _node->declare_parameter<std::string>("topic_imu", "/imu0");
   _node->get_parameter("topic_imu", topic_imu);
@@ -174,10 +174,10 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
                                                               std::bind(&ROS2Visualizer::callback_inertial, this, std::placeholders::_1));
   PRINT_INFO("subscribing to IMU: %s\n", topic_imu.c_str());
 
-  // Logic for sync stereo subscriber
+  // 同步双目订阅者的逻辑
   // https://answers.ros.org/question/96346/subscribe-to-two-image_raws-with-one-function/?answer=96491#post-id-96491
   if (_app->get_params().state_options.num_cameras == 2) {
-    // Read in the topics
+    // 读取话题
     std::string cam_topic0, cam_topic1;
     _node->declare_parameter<std::string>("topic_camera" + std::to_string(0), "/cam" + std::to_string(0) + "/image_raw");
     _node->get_parameter("topic_camera" + std::to_string(0), cam_topic0);
@@ -185,15 +185,15 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
     _node->get_parameter("topic_camera" + std::to_string(1), cam_topic1);
     parser->parse_external("relative_config_imucam", "cam" + std::to_string(0), "rostopic", cam_topic0);
     parser->parse_external("relative_config_imucam", "cam" + std::to_string(1), "rostopic", cam_topic1);
-    // Create sync filter (they have unique pointers internally, so we have to use move logic here...)
+    // 创建同步过滤器（它们内部有唯一指针，因此我们必须使用 move 逻辑...）
     auto image_sub0 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(_node, cam_topic0);
     auto image_sub1 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(_node, cam_topic1);
     auto sync = std::make_shared<message_filters::Synchronizer<sync_pol>>(sync_pol(10), *image_sub0, *image_sub1);
     sync->registerCallback(std::bind(&ROS2Visualizer::callback_stereo, this, std::placeholders::_1, std::placeholders::_2, 0, 1));
     // sync->registerCallback([](const sensor_msgs::msg::Image::SharedPtr msg0, const sensor_msgs::msg::Image::SharedPtr msg1)
     // {callback_stereo(msg0, msg1, 0, 1);});
-    // sync->registerCallback(&callback_stereo2); // since the above two alternatives fail to compile for some reason
-    // Append to our vector of subscribers
+    // sync->registerCallback(&callback_stereo2); // 因为上面两种方式编译不通过
+    // 添加到我们的订阅者向量中
     sync_cam.push_back(sync);
     sync_subs_cam.push_back(image_sub0);
     sync_subs_cam.push_back(image_sub1);
@@ -437,45 +437,52 @@ void ROS2Visualizer::visualize_final() {
 
 void ROS2Visualizer::callback_inertial(const sensor_msgs::msg::Imu::SharedPtr msg) {
 
-  // convert into correct format
+  // 将 ros 中的 IMU 数据转换为 ov_core::ImuData 格式，时间是1.***e+9 的格式
   ov_core::ImuData message;
   message.timestamp = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
   message.wm << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
   message.am << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 
-  // send it to our VIO system
+  // 将数据传给 VIO 系统
   _app->feed_measurement_imu(message);
+  // 发布实时的里程计信息（快速外推）
   visualize_odometry(message.timestamp);
 
-  // If the processing queue is currently active / running just return so we can keep getting measurements
-  // Otherwise create a second thread to do our update in an async manor
-  // The visualization of the state, images, and features will be synchronous with the update!
+  // 如果处理队列当前正在运行，则直接返回，这样我们可以继续接收测量数据
+  // 否则创建第二个线程以异步方式进行更新
+  // 状态、图像和特征的可视化将与更新同步进行！
+
+  // imu以200Hz进入这个回调，相机是30Hz速度，
+  // 为了防止阻塞单独创建线程处理相机数据并喂给 VIO 系统
+  // 如果进入时线程正在运行，则直接返回
   if (thread_update_running)
     return;
   thread_update_running = true;
   std::thread thread([&] {
-    // Lock on the queue (prevents new images from appending)
+    // 锁定图像队列，防止图像回调向队列添加数据时出现问题
     std::lock_guard<std::mutex> lck(camera_queue_mtx);
 
-    // Count how many unique image streams
+    // 统计有多少唯一的图像流
     std::map<int, bool> unique_cam_ids;
     for (const auto &cam_msg : camera_queue) {
       unique_cam_ids[cam_msg.sensor_ids.at(0)] = true;
     }
 
-    // If we do not have enough unique cameras then we need to wait
-    // We should wait till we have one of each camera to ensure we propagate in the correct order
+    // 如果没有足够的唯一相机，则需要等待
+    // 我们应该等到每个相机都有一帧，确保按正确顺序处理
     auto params = _app->get_params();
     size_t num_unique_cameras = (params.state_options.num_cameras == 2) ? 1 : params.state_options.num_cameras;
     if (unique_cam_ids.size() == num_unique_cameras) {
 
-      // Loop through our queue and see if we are able to process any of our camera measurements
-      // We are able to process if we have at least one IMU measurement greater than the camera time
+      // 遍历队列，查看是否可以处理任何相机测量
+      // 如果有至少一个 IMU 测量的时间大于相机时间，则可以处理
       double timestamp_imu_inC = message.timestamp - _app->get_state()->_calib_dt_CAMtoIMU->value()(0);
       while (!camera_queue.empty() && camera_queue.at(0).timestamp < timestamp_imu_inC) {
         auto rT0_1 = boost::posix_time::microsec_clock::local_time();
         double update_dt = 100.0 * (timestamp_imu_inC - camera_queue.at(0).timestamp);
+        // 将相机数据送入 VIO 系统
         _app->feed_measurement_camera(camera_queue.at(0));
+        // 更新可视化
         visualize();
         camera_queue.pop_front();
         auto rT0_2 = boost::posix_time::microsec_clock::local_time();
@@ -486,8 +493,8 @@ void ROS2Visualizer::callback_inertial(const sensor_msgs::msg::Imu::SharedPtr ms
     thread_update_running = false;
   });
 
-  // If we are single threaded, then run single threaded
-  // Otherwise detach this thread so it runs in the background!
+  // 如果是单线程，则以单线程方式运行
+  // 否则将此线程分离，使其在后台运行！
   if (!_app->get_params().use_multi_threading_subs) {
     thread.join();
   } else {
@@ -537,7 +544,7 @@ void ROS2Visualizer::callback_monocular(const sensor_msgs::msg::Image::SharedPtr
 void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedPtr msg0, const sensor_msgs::msg::Image::ConstSharedPtr msg1,
                                      int cam_id0, int cam_id1) {
 
-  // Check if we should drop this image
+  // 检查我们是否应该丢弃这个图像（频率过高）
   double timestamp = msg0->header.stamp.sec + msg0->header.stamp.nanosec * 1e-9;
   double time_delta = 1.0 / _app->get_params().track_frequency;
   if (camera_last_timestamp.find(cam_id0) != camera_last_timestamp.end() && timestamp < camera_last_timestamp.at(cam_id0) + time_delta) {
@@ -545,7 +552,7 @@ void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedP
   }
   camera_last_timestamp[cam_id0] = timestamp;
 
-  // Get the image
+  // 转换左目图像
   cv_bridge::CvImageConstPtr cv_ptr0;
   try {
     cv_ptr0 = cv_bridge::toCvShare(msg0, sensor_msgs::image_encodings::MONO8);
@@ -554,7 +561,7 @@ void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedP
     return;
   }
 
-  // Get the image
+  // 转换右目图像
   cv_bridge::CvImageConstPtr cv_ptr1;
   try {
     cv_ptr1 = cv_bridge::toCvShare(msg1, sensor_msgs::image_encodings::MONO8);
@@ -563,7 +570,7 @@ void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedP
     return;
   }
 
-  // Create the measurement
+  // 利用相机数据构造 ov_core::CameraData 数据
   ov_core::CameraData message;
   message.timestamp = cv_ptr0->header.stamp.sec + cv_ptr0->header.stamp.nanosec * 1e-9;
   message.sensor_ids.push_back(cam_id0);
@@ -572,7 +579,7 @@ void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedP
   message.images.push_back(cv_ptr1->image.clone());
 
   // Load the mask if we are using it, else it is empty
-  // TODO: in the future we should get this from external pixel segmentation
+  // TODO: 将来我们应该从外部像素分割中得到这个
   if (_app->get_params().use_mask) {
     message.masks.push_back(_app->get_params().masks.at(cam_id0));
     message.masks.push_back(_app->get_params().masks.at(cam_id1));
@@ -582,7 +589,7 @@ void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedP
     message.masks.push_back(cv::Mat::zeros(cv_ptr1->image.rows, cv_ptr1->image.cols, CV_8UC1));
   }
 
-  // append it to our queue of images
+  // 将数据添加到图像队列中
   std::lock_guard<std::mutex> lck(camera_queue_mtx);
   camera_queue.push_back(message);
   std::sort(camera_queue.begin(), camera_queue.end());

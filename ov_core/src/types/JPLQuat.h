@@ -28,29 +28,29 @@
 namespace ov_type {
 
 /**
- * @brief Derived Type class that implements JPL quaternion
+ * @brief 实现 JPL 四元数的派生 Type 类
  *
- * This quaternion uses a left-multiplicative error state and follows the "JPL convention".
- * Please checkout our utility functions in the quat_ops.h file.
- * We recommend that people new quaternions check out the following resources:
+ * 此四元数采用左乘误差状态，并遵循“JPL 约定”。
+ * 请参考 quat_ops.h 文件中的实用函数。
+ * 建议初学者参考以下资源了解四元数：
  * - http://mars.cs.umn.edu/tr/reports/Trawny05b.pdf
  * - ftp://naif.jpl.nasa.gov/pub/naif/misc/Quaternion_White_Paper/Quaternions_White_Paper.pdf
  *
  *
- * We need to take special care to handle edge cases when converting to and from other rotation formats.
- * All equations are based on the following tech report @cite Trawny2005TR :
+ * 在与其他旋转格式互相转换时需特别注意边界情况。
+ * 所有公式均基于以下技术报告 @cite Trawny2005TR :
  *
  * > Trawny, Nikolas, and Stergios I. Roumeliotis. "Indirect Kalman filter for 3D attitude estimation."
  * > University of Minnesota, Dept. of Comp. Sci. & Eng., Tech. Rep 2 (2005): 2005.
  * > http://mars.cs.umn.edu/tr/reports/Trawny05b.pdf
  *
- * @section jplquat_define JPL Quaternion Definition
+ * @section jplquat_define JPL 四元数定义
  *
- * We define the quaternion as the following linear combination:
+ * 我们将四元数定义为以下线性组合：
  * @f[
  *  \bar{q} = q_4+q_1\mathbf{i}+q_2\mathbf{j}+q_3\mathbf{k}
  * @f]
- * Where i,j,k are defined as the following:
+ * 其中 i, j, k 定义如下：
  * @f[
  *  \mathbf{i}^2=-1~,~\mathbf{j}^2=-1~,~\mathbf{k}^2=-1
  * @f]
@@ -61,28 +61,28 @@ namespace ov_type {
  *  ~,~
  *  -\mathbf{k}\mathbf{i}=\mathbf{i}\mathbf{k}=\mathbf{j}
  * @f]
- * As noted in @cite Trawny2005TR this does not correspond to the Hamilton notation, and follows the "JPL Proposed Standard Conventions".
- * The q_4 quantity is the "scalar" portion of the quaternion, while q_1, q_2, q_3 are part of the "vector" portion.
- * We split the 4x1 vector into the following convention:
+ * 如 @cite Trawny2005TR 所述，这与 Hamilton 表示法不同，遵循“JPL 提议的标准约定”。
+ * q_4 是四元数的“标量”部分，q_1、q_2、q_3 是“向量”部分。
+ * 我们将 4x1 向量分为如下约定：
  * @f[
  *  \bar{q} = \begin{bmatrix}q_1\\q_2\\q_3\\q_4\end{bmatrix} = \begin{bmatrix}\mathbf{q}\\q_4\end{bmatrix}
  * @f]
- * It is also important to note that the quaternion is constrained to the unit circle:
+ * 还需注意，四元数被约束在单位圆上：
  * @f[
  *  |\bar{q}| = \sqrt{\bar{q}^\top\bar{q}} = \sqrt{|\mathbf{q}|^2+q_4^2} = 1
  * @f]
  *
  *
- * @section jplquat_errorstate Error State Definition
+ * @section jplquat_errorstate 误差状态定义
  *
- * It is important to note that one can prove that the left-multiplicative quaternion error is equivalent to the SO(3) error.
- * If one wishes to use the right-hand error, this would need to be implemented as a different type then this class!
- * This is noted in Eq. (71) in @cite Trawny2005TR .
- * Specifically we have the following:
+ * 需要注意的是，可以证明左乘四元数误差等价于 SO(3) 误差。
+ * 如果需要使用右乘误差，则需要实现不同的类型！
+ * 详见 @cite Trawny2005TR 的公式 (71)。
+ * 具体如下：
  * \f{align*}{
  * {}^{I}_G\bar{q} &\simeq \begin{bmatrix} \frac{1}{2} \delta \boldsymbol{\theta} \\ 1 \end{bmatrix} \otimes {}^{I}_G\hat{\bar{q}}
  * \f}
- * which is the same as:
+ * 等价于：
  * \f{align*}{
  * {}^{I}_G \mathbf{R} &\simeq \exp(-\delta \boldsymbol{\theta}) {}^{I}_G \hat{\mathbf{R}} \\
  * &\simeq (\mathbf{I} - \lfloor \delta \boldsymbol{\theta} \rfloor) {}^{I}_G \hat{\mathbf{R}} \\
@@ -102,14 +102,13 @@ public:
   ~JPLQuat() {}
 
   /**
-   * @brief Implements update operation by left-multiplying the current
-   * quaternion with a quaternion built from a small axis-angle perturbation.
+   * @brief 通过将当前四元数与由小轴角扰动构建的四元数左乘，实现更新操作。
    *
    * @f[
    * \bar{q}=norm\Big(\begin{bmatrix} \frac{1}{2} \delta \boldsymbol{\theta}_{dx} \\ 1 \end{bmatrix}\Big) \otimes \hat{\bar{q}}
    * @f]
    *
-   * @param dx Axis-angle representation of the perturbing quaternion
+   * @param dx 扰动四元数的轴角表示
    */
   void update(const Eigen::VectorXd &dx) override {
 
@@ -125,14 +124,14 @@ public:
   }
 
   /**
-   * @brief Sets the value of the estimate and recomputes the internal rotation matrix
-   * @param new_value New value for the quaternion estimate (JPL quat as x,y,z,w)
+   * @brief 设置估计值并重新计算内部旋转矩阵
+   * @param new_value 四元数估计的新值（JPL 四元数，格式为 x,y,z,w）
    */
   void set_value(const Eigen::MatrixXd &new_value) override { set_value_internal(new_value); }
 
   /**
-   * @brief Sets the fej value and recomputes the fej rotation matrix
-   * @param new_value New value for the quaternion estimate (JPL quat as x,y,z,w)
+   * @brief 设置第一估计值（fej）并重新计算第一估计的旋转矩阵
+   * @param new_value 四元数估计的新值（JPL 四元数，格式为 x,y,z,w）
    */
   void set_fej(const Eigen::MatrixXd &new_value) override { set_fej_internal(new_value); }
 
@@ -143,10 +142,10 @@ public:
     return Clone;
   }
 
-  /// Rotation access
+  /// 旋转矩阵访问
   Eigen::Matrix<double, 3, 3> Rot() const { return _R; }
 
-  /// FEJ Rotation access
+  /// 第一估计旋转矩阵访问
   Eigen::Matrix<double, 3, 3> Rot_fej() const { return _Rfej; }
 
 protected:
@@ -157,8 +156,8 @@ protected:
   Eigen::Matrix<double, 3, 3> _Rfej;
 
   /**
-   * @brief Sets the value of the estimate and recomputes the internal rotation matrix
-   * @param new_value New value for the quaternion estimate
+   * @brief 设置估计值并重新计算内部旋转矩阵
+   * @param new_value 四元数估计的新值
    */
   void set_value_internal(const Eigen::MatrixXd &new_value) {
 
@@ -172,8 +171,8 @@ protected:
   }
 
   /**
-   * @brief Sets the fej value and recomputes the fej rotation matrix
-   * @param new_value New value for the quaternion estimate
+   * @brief 设置第一估计值（fej）并重新计算第一估计的旋转矩阵
+   * @param new_value 四元数估计的新值
    */
   void set_fej_internal(const Eigen::MatrixXd &new_value) {
 

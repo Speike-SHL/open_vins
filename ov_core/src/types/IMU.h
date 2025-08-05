@@ -28,11 +28,11 @@
 namespace ov_type {
 
 /**
- * @brief Derived Type class that implements an IMU state
+ * @brief 派生自 Type 类，实现了 IMU 状态
  *
- * Contains a PoseJPL, Vec velocity, Vec gyro bias, and Vec accel bias.
- * This should be similar to that of the standard MSCKF state besides the ordering.
- * The pose is first, followed by velocity, etc.
+ * 包含一个 PoseJPL、Vec 速度、Vec 陀螺仪偏置和 Vec 加速度计偏置。
+ * 这应当与标准 MSCKF 状态类似，除了顺序不同。
+ * 姿态在前，随后是速度等。
  */
 class IMU : public Type {
 
@@ -55,11 +55,11 @@ public:
   ~IMU() {}
 
   /**
-   * @brief Sets id used to track location of variable in the filter covariance
+   * @brief 设置用于跟踪变量在滤波器协方差中的位置的id
    *
-   * Note that we update the sub-variables also.
+   * 注意我们也会更新子变量的id。
    *
-   * @param new_id entry in filter covariance corresponding to this variable
+   * @param new_id 对应于该变量在滤波器协方差中的条目
    */
   void set_local_id(int new_id) override {
     _id = new_id;
@@ -70,10 +70,9 @@ public:
   }
 
   /**
-   * @brief Performs update operation using JPLQuat update for orientation, then vector updates for
-   * position, velocity, gyro bias, and accel bias (in that order).
+   * @brief 使用JPLQuat更新姿态，然后依次对位置、速度、陀螺仪偏置和加速度计偏置进行向量更新。
    *
-   * @param dx 15 DOF vector encoding update using the following order (q, p, v, bg, ba)
+   * @param dx 15维向量，按照如下顺序编码更新量（q, p, v, bg, ba）
    */
   void update(const Eigen::VectorXd &dx) override {
 
@@ -96,14 +95,14 @@ public:
   }
 
   /**
-   * @brief Sets the value of the estimate
-   * @param new_value New value we should set
+   * @brief 设置估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_value(const Eigen::MatrixXd &new_value) override { set_value_internal(new_value); }
 
   /**
-   * @brief Sets the value of the first estimate
-   * @param new_value New value we should set
+   * @brief 设置初始估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_fej(const Eigen::MatrixXd &new_value) override { set_fej_internal(new_value); }
 
@@ -197,8 +196,8 @@ protected:
   std::shared_ptr<Vec> _ba;
 
   /**
-   * @brief Sets the value of the estimate
-   * @param new_value New value we should set
+   * @brief 设置估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_value_internal(const Eigen::MatrixXd &new_value) {
 
@@ -214,8 +213,8 @@ protected:
   }
 
   /**
-   * @brief Sets the value of the first estimate
-   * @param new_value New value we should set
+   * @brief 设置初始估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_fej_internal(const Eigen::MatrixXd &new_value) {
 

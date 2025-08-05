@@ -30,16 +30,16 @@ State::State(StateOptions &options) {
   // Save our options
   _options = options;
 
-  // Append the imu to the state and covariance
+  // 将 IMU 添加到状态和协方差中
   int current_id = 0;
   _imu = std::make_shared<IMU>();
   _imu->set_local_id(current_id);
   _variables.push_back(_imu);
   current_id += _imu->size();
 
-  // Append the imu intrinsics to the state and covariance
-  // NOTE: these need to be right "next" to the IMU state in the covariance
-  // NOTE: since if calibrating these will evolve / be correlated during propagation
+  // 将 IMU 内参添加到状态和协方差中
+  // NOTE：这些需要紧挨着 IMU 状态放在协方差矩阵中
+  // NOTE：因为如果要标定，这些参数在传播过程中会演化/与 IMU 状态相关联
   _calib_imu_dw = std::make_shared<Vec>(6);
   _calib_imu_da = std::make_shared<Vec>(6);
   if (options.imu_model == StateOptions::ImuModel::KALIBR) {
@@ -102,27 +102,27 @@ State::State(StateOptions &options) {
     current_id += _calib_dt_CAMtoIMU->size();
   }
 
-  // Loop through each camera and create extrinsic and intrinsics
+  // 遍历每个相机，创建外参和内参
   for (int i = 0; i < _options.num_cameras; i++) {
 
-    // Allocate extrinsic transform
+    // 分配外参变换
     auto pose = std::make_shared<PoseJPL>();
 
-    // Allocate intrinsics for this camera
+    // 为该相机分配内参
     auto intrin = std::make_shared<Vec>(8);
 
-    // Add these to the corresponding maps
+    // 将这些添加到对应的映射中
     _calib_IMUtoCAM.insert({i, pose});
     _cam_intrinsics.insert({i, intrin});
 
-    // If calibrating camera-imu pose, add to variables
+    // 如果需要标定相机-IMU位姿，则添加到变量中
     if (_options.do_calib_camera_pose) {
       pose->set_local_id(current_id);
       _variables.push_back(pose);
       current_id += pose->size();
     }
 
-    // If calibrating camera intrinsics, add to variables
+    // 如果需要标定相机内参，则添加到变量中
     if (_options.do_calib_camera_intrinsics) {
       intrin->set_local_id(current_id);
       _variables.push_back(intrin);
@@ -130,10 +130,10 @@ State::State(StateOptions &options) {
     }
   }
 
-  // Finally initialize our covariance to small value
+  // 最后将我们的协方差初始化为较小的值
   _Cov = std::pow(1e-3, 2) * Eigen::MatrixXd::Identity(current_id, current_id);
 
-  // Finally, set some of our priors for our calibration parameters
+  // 最后，为我们的标定参数设置一些先验
   if (_options.do_calib_imu_intrinsics) {
     _Cov.block(_calib_imu_dw->id(), _calib_imu_dw->id(), 6, 6) = std::pow(0.005, 2) * Eigen::Matrix<double, 6, 6>::Identity();
     _Cov.block(_calib_imu_da->id(), _calib_imu_da->id(), 6, 6) = std::pow(0.008, 2) * Eigen::Matrix<double, 6, 6>::Identity();

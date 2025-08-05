@@ -29,10 +29,10 @@
 namespace ov_type {
 
 /**
- * @brief Derived Type class that implements a 6 d.o.f pose
+ * @brief 实现6自由度位姿的派生Type类
  *
- * Internally we use a JPLQuat quaternion representation for the orientation and 3D Vec position.
- * Please see JPLQuat for details on its update procedure and its left multiplicative error.
+ * 内部我们使用JPLQuat四元数表示旋转，使用3维Vec表示位置。
+ * 有关其更新过程及左乘误差的详细信息，请参见JPLQuat。
  */
 class PoseJPL : public Type {
 
@@ -54,11 +54,11 @@ public:
   ~PoseJPL() {}
 
   /**
-   * @brief Sets id used to track location of variable in the filter covariance
+   * @brief 设置用于跟踪变量在滤波器协方差中的位置的id
    *
-   * Note that we update the sub-variables also.
+   * 注意我们也会更新子变量的id。
    *
-   * @param new_id entry in filter covariance corresponding to this variable
+   * @param new_id 对应于该变量在滤波器协方差中的条目
    */
   void set_local_id(int new_id) override {
     _id = new_id;
@@ -67,9 +67,9 @@ public:
   }
 
   /**
-   * @brief Update q and p using a the JPLQuat update for orientation and vector update for position
+   * @brief 使用JPLQuat的更新方法更新旋转q，使用向量更新方法更新位置p
    *
-   * @param dx Correction vector (orientation then position)
+   * @param dx 校正向量（先旋转后位置）
    */
   void update(const Eigen::VectorXd &dx) override {
 
@@ -91,14 +91,14 @@ public:
   }
 
   /**
-   * @brief Sets the value of the estimate
-   * @param new_value New value we should set
+   * @brief 设置估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_value(const Eigen::MatrixXd &new_value) override { set_value_internal(new_value); }
 
   /**
-   * @brief Sets the value of the first estimate
-   * @param new_value New value we should set
+   * @brief 设置首次估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_fej(const Eigen::MatrixXd &new_value) override { set_fej_internal(new_value); }
 
@@ -150,8 +150,8 @@ protected:
   std::shared_ptr<Vec> _p;
 
   /**
-   * @brief Sets the value of the estimate
-   * @param new_value New value we should set
+   * @brief 设置估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_value_internal(const Eigen::MatrixXd &new_value) {
 
@@ -168,8 +168,8 @@ protected:
   }
 
   /**
-   * @brief Sets the value of the first estimate
-   * @param new_value New value we should set
+   * @brief 设置首次估计值
+   * @param new_value 我们应该设置的新值
    */
   void set_fej_internal(const Eigen::MatrixXd &new_value) {
 

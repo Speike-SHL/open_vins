@@ -92,7 +92,7 @@ public:
 #endif
 
 #if ROS_AVAILABLE == 2
-  /// Allows setting of the node if we have ROS to override parameters
+  /// 如果我们使用ROS，可以设置节点来覆盖参数。
   void set_node(std::shared_ptr<rclcpp::Node> &node_) { this->node = node_; }
 #endif
 
@@ -140,19 +140,19 @@ public:
   }
 
   /**
-   * @brief Custom parser for the external parameter files with levels.
+   * @brief 带有层级的外部参数文件自定义解析器。
    *
-   * This will first load the external file requested.
-   * From there it will try to find the first level requested (e.g. imu0, cam0, cam1).
-   * Then the requested node can be found under this sensor name.
-   * ROS can override the config with `<sensor_name>_<node_name>` (e.g., cam0_distortion).
+   * 该函数会首先加载请求的外部文件。
+   * 然后尝试查找第一级（例如 imu0、cam0、cam1）。
+   * 接着在该传感器名称下查找所需节点。
+   * ROS 可以通过 `<sensor_name>_<node_name>`（例如 cam0_distortion）覆盖配置。
    *
-   * @tparam T Type of parameter we are looking for.
-   * @param external_node_name Name of the node we will get our relative path from
-   * @param sensor_name The first level node we will try to get the requested node under
-   * @param node_name Name of the node
-   * @param node_result Resulting value (should already have default value in it)
-   * @param required If this parameter is required by the user to set
+   * @tparam T 要查找的参数类型。
+   * @param external_node_name 我们将从中获取相对路径的节点名称
+   * @param sensor_name 我们将在其下查找请求节点的第一级节点名称
+   * @param node_name 节点名称
+   * @param node_result 结果值（应已包含默认值）
+   * @param required 用户是否必须设置该参数
    */
   template <class T>
   void parse_external(const std::string &external_node_name, const std::string &sensor_name, const std::string &node_name, T &node_result,

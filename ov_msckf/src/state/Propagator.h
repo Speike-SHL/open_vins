@@ -58,9 +58,9 @@ public:
   }
 
   /**
-   * @brief Stores incoming inertial readings
-   * @param message Contains our timestamp and inertial information
-   * @param oldest_time Time that we can discard measurements before (in IMU clock)
+   * @brief 存储传入的惯性测量数据
+   * @param message 包含时间戳和惯性信息
+   * @param oldest_time 可以丢弃早于该时间的测量值（IMU时钟）
    */
   void feed_imu(const ov_core::ImuData &message, double oldest_time = -1) {
 
@@ -91,7 +91,7 @@ public:
   }
 
   /**
-   * @brief Will invalidate the cache used for fast propagation
+   * @brief 使用于 fast propagation 的缓存失效
    */
   void invalidate_cache() { cache_imu_valid = false; }
 
@@ -110,46 +110,47 @@ public:
   void propagate_and_clone(std::shared_ptr<State> state, double timestamp);
 
   /**
-   * @brief Gets what the state and its covariance will be at a given timestamp
+   * @brief 获取在给定时间戳下的状态及其协方差
    *
-   * This can be used to find what the state will be in the "future" without propagating it.
-   * This will propagate a clone of the current IMU state and its covariance matrix.
-   * This is typically used to provide high frequency pose estimates between updates.
+   * 该函数可用于预测“未来”某一时刻的状态，而无需实际推进主状态。
+   * 它会对当前IMU状态及其协方差矩阵进行克隆并传播。
+   * 通常用于在两次更新之间提供高频率的位姿估计。
    *
-   * @param state Pointer to state
-   * @param timestamp Time to propagate to (IMU clock frame)
-   * @param state_plus The propagated state (q_GtoI, p_IinG, v_IinI, w_IinI)
-   * @param covariance The propagated covariance (q_GtoI, p_IinG, v_IinI, w_IinI)
-   * @return True if we were able to propagate the state to the current timestep
+   * @param state 指向状态的指针
+   * @param timestamp 需要传播到的时间（IMU时钟）
+   * @param state_plus 传播后的状态（q_GtoI, p_IinG, v_IinI, w_IinI）
+   * @param covariance 传播后的协方差（q_GtoI, p_IinG, v_IinI, w_IinI）
+   * @return 如果能够成功传播到当前时间戳则返回true
    */
   bool fast_state_propagate(std::shared_ptr<State> state, double timestamp, Eigen::Matrix<double, 13, 1> &state_plus,
                             Eigen::Matrix<double, 12, 12> &covariance);
 
   /**
-   * @brief Helper function that given current imu data, will select imu readings between the two times.
+   * @brief 辅助函数，根据当前IMU数据，选择两个时间点之间的IMU读数。
    *
-   * This will create measurements that we will integrate with, and an extra measurement at the end.
-   * We use the @ref interpolate_data() function to "cut" the imu readings at the begining and end of the integration.
-   * The timestamps passed should already take into account the time offset values.
+   * 这将创建我们将用于积分的测量值，并在末尾添加一个额外的测量值。
+   * 我们使用 @ref interpolate_data() 函数在积分开始和结束时“截断”IMU读数。
+   * 传入的时间戳应已考虑时间偏移值。
    *
-   * @param imu_data IMU data we will select measurements from
-   * @param time0 Start timestamp
-   * @param time1 End timestamp
-   * @param warn If we should warn if we don't have enough IMU to propagate with (e.g. fast prop will get warnings otherwise)
-   * @return Vector of measurements (if we could compute them)
+   * @param imu_data 我们将从中选择测量值的IMU数据
+   * @param time0 开始时间戳
+   * @param time1 结束时间戳
+   * @param warn 如果IMU数据不足以传播时是否发出警告（例如，快速传播会收到警告）
+   * @return 测量值的向量（如果我们可以计算它们）
+   * @note 但是如果 time0 在所有的 imu 数据前面，则并不会在 time0 处进行插值？
    */
   static std::vector<ov_core::ImuData> select_imu_readings(const std::vector<ov_core::ImuData> &imu_data, double time0, double time1,
                                                            bool warn = true);
 
   /**
-   * @brief Nice helper function that will linearly interpolate between two imu messages.
+   * @brief 在线性插值两个IMU消息之间的便捷辅助函数。
    *
-   * This should be used instead of just "cutting" imu messages that bound the camera times
-   * Give better time offset if we use this function, could try other orders/splines if the imu is slow.
+   * 应优先使用此函数，而不是简单地“截断”包围相机时间的IMU消息。
+   * 如果IMU频率较低，使用该函数能获得更好的时间对齐效果，也可以尝试更高阶/样条插值。
    *
-   * @param imu_1 imu at begining of interpolation interval
-   * @param imu_2 imu at end of interpolation interval
-   * @param timestamp Timestamp being interpolated to
+   * @param imu_1 插值区间起始的IMU数据
+   * @param imu_2 插值区间结束的IMU数据
+   * @param timestamp 需要插值到的时间戳
    */
   static ov_core::ImuData interpolate_data(const ov_core::ImuData &imu_1, const ov_core::ImuData &imu_2, double timestamp) {
     // time-distance lambda
@@ -221,20 +222,19 @@ public:
 
 protected:
   /**
-   * @brief Propagates the state forward using the imu data and computes the noise covariance and state-transition
-   * matrix of this interval.
+   * @brief 使用IMU数据将状态向前传播，并计算该区间的噪声协方差和状态转移矩阵。
    *
-   * This function can be replaced with analytical/numerical integration or when using a different state representation.
-   * This contains our state transition matrix along with how our noise evolves in time.
-   * If you have other state variables besides the IMU that evolve you would add them here.
-   * See the @ref propagation_discrete page for details on how discrete model was derived.
-   * See the @ref propagation_analytical page for details on how analytic model was derived.
+   * 此函数可以被解析/数值积分或其他状态表示的实现所替换。
+   * 该函数包含了我们的状态转移矩阵以及噪声随时间的演化方式。
+   * 如果除了IMU之外还有其他状态变量需要演化，也应在此添加。
+   * 离散模型推导详见 @ref propagation_discrete 页面。
+   * 解析模型推导详见 @ref propagation_analytical 页面。
    *
-   * @param state Pointer to state
-   * @param data_minus imu readings at beginning of interval
-   * @param data_plus imu readings at end of interval
-   * @param F State-transition matrix over the interval
-   * @param Qd Discrete-time noise covariance over the interval
+   * @param state 状态指针
+   * @param data_minus 区间起始时刻的IMU读数
+   * @param data_plus 区间结束时刻的IMU读数
+   * @param F 区间内的状态转移矩阵
+   * @param Qd 区间内的离散时间噪声协方差
    */
   void predict_and_compute(std::shared_ptr<State> state, const ov_core::ImuData &data_minus, const ov_core::ImuData &data_plus,
                            Eigen::MatrixXd &F, Eigen::MatrixXd &Qd);
