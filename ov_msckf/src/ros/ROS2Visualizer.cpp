@@ -268,7 +268,7 @@ void ROS2Visualizer::visualize() {
 
 void ROS2Visualizer::visualize_odometry(double timestamp) {
 
-  // Return if we have not inited and a second has passes
+  // 如果系统没有初始化或者初始化后不足 1 秒, 直接返回
   if (!_app->initialized() || (timestamp - _app->initialized_time()) < 1)
     return;
 
@@ -541,6 +541,7 @@ void ROS2Visualizer::callback_monocular(const sensor_msgs::msg::Image::SharedPtr
   std::sort(camera_queue.begin(), camera_queue.end());
 }
 
+/// 只是把双目图像封装为 deque<ov_core::CameraData> camera_queue 
 void ROS2Visualizer::callback_stereo(const sensor_msgs::msg::Image::ConstSharedPtr msg0, const sensor_msgs::msg::Image::ConstSharedPtr msg1,
                                      int cam_id0, int cam_id1) {
 

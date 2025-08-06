@@ -201,20 +201,21 @@ void StateHelper::EKFUpdate(std::shared_ptr<State> state, const std::vector<std:
   }
 }
 
+/// 将初始化过程中计算得到的协方差矩阵正确地映射到状态对象的协方差矩阵中
 void StateHelper::set_initial_covariance(std::shared_ptr<State> state, const Eigen::MatrixXd &covariance,
                                          const std::vector<std::shared_ptr<ov_type::Type>> &order) {
 
-  // We need to loop through each element and overwrite the current covariance values
-  // For example consider the following:
-  // x = [ ori pos ] -> insert into -> x = [ ori bias pos ]
+  // 我们需要遍历每个元素并覆盖当前的协方差值
+  // 例如考虑以下情况：
+  // x = [ ori pos ] -> 插入到 -> x = [ ori bias pos ]
   // P = [ P_oo P_op ] -> P = [ P_oo  0   P_op ]
   //     [ P_po P_pp ]        [  0    P*    0  ]
   //                          [ P_po  0   P_pp ]
-  // The key assumption here is that the covariance is block diagonal (cross-terms zero with P* can be dense)
-  // This is normally the care on startup (for example between calibration and the initial state
+  // 这里的关键假设是协方差是块对角的（交叉项为零，P*可以是密集的）
+  // 这通常在启动时是这样的情况（例如在标定和初始状态之间）
 
-  // For each variable, lets copy over all other variable cross terms
-  // Note: this copies over itself to when i_index=k_index
+  // 对于每个变量，我们复制所有其他变量的交叉项
+  // 注意：当 i_index=k_index 时，它会复制自身
   int i_index = 0;
   for (size_t i = 0; i < order.size(); i++) {
     int k_index = 0;

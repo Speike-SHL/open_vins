@@ -33,107 +33,107 @@ namespace ov_core {
 class Feature;
 
 /**
- * @brief Database containing features we are currently tracking.
+ * @brief 包含我们当前正在跟踪的特征的数据库。
  *
- * Each visual tracker has this database in it and it contains all features that we are tracking.
- * The trackers will insert information into this database when they get new measurements from doing tracking.
- * A user would then query this database for features that can be used for update and remove them after they have been processed.
+ * 每个视觉跟踪器都有这个数据库，它包含我们正在跟踪的所有特征。
+ * 跟踪器在从跟踪中获得新测量时会将信息插入到这个数据库中。
+ * 用户然后查询这个数据库以获取可用于更新的特征，并在处理后移除它们。
  *
  *
  * @m_class{m-note m-warning}
  *
- * @par A Note on Multi-Threading Support
- * There is some support for asynchronous multi-threaded access.
- * Since each feature is a pointer just directly returning and using them is not thread safe.
- * Thus, to be thread safe, use the "remove" flag for each function which will remove it from this feature database.
- * This prevents the trackers from adding new measurements and editing the feature information.
- * For example, if you are asynchronous tracking cameras and you chose to update the state, then remove all features you will use in update.
- * The feature trackers will continue to add features while you update, whose measurements can be used in the next update step!
+ * @par 关于多线程支持的说明
+ * 对异步多线程访问有一定的支持。
+ * 由于每个特征都是一个指针，直接返回和使用它们不是线程安全的。
+ * 因此，为了线程安全，使用每个函数的"remove"标志，它将从这个特征数据库中移除它。
+ * 这防止跟踪器添加新测量和编辑特征信息。
+ * 例如，如果您正在异步跟踪相机并选择更新状态，那么移除您将在更新中使用的所有特征。
+ * 特征跟踪器将在您更新时继续添加特征，这些测量可以在下一个更新步骤中使用！
  *
  */
 class FeatureDatabase {
 
 public:
   /**
-   * @brief Default constructor
+   * @brief 默认构造函数
    */
   FeatureDatabase() {}
 
   /**
-   * @brief Get a specified feature
-   * @param id What feature we want to get
-   * @param remove Set to true if you want to remove the feature from the database (you will need to handle the freeing of memory)
-   * @return Either a feature object, or null if it is not in the database.
+   * @brief 获取指定的特征
+   * @param id 我们想要获取的特征ID
+   * @param remove 如果您想从数据库中移除特征，设为true（您需要处理内存释放）
+   * @return 特征对象，如果不在数据库中则返回null。
    */
   std::shared_ptr<Feature> get_feature(size_t id, bool remove = false);
 
   /**
-   * @brief Get a specified feature clone (pointer is thread safe)
-   * @param id What feature we want to get
-   * @param feat Feature with data in it
-   * @return True if the feature was found
+   * @brief 获取指定特征的克隆（指针是线程安全的）
+   * @param id 我们想要获取的特征ID
+   * @param feat 包含数据的特征
+   * @return 如果找到特征则返回true
    */
   bool get_feature_clone(size_t id, Feature &feat);
 
   /**
-   * @brief Update a feature object
-   * @param id ID of the feature we will update
-   * @param timestamp time that this measurement occured at
-   * @param cam_id which camera this measurement was from
-   * @param u raw u coordinate
-   * @param v raw v coordinate
-   * @param u_n undistorted/normalized u coordinate
-   * @param v_n undistorted/normalized v coordinate
+   * @brief 更新特征对象
+   * @param id 我们将更新的特征ID
+   * @param timestamp 此测量发生的时间
+   * @param cam_id 此测量来自哪个相机
+   * @param u 原始u坐标
+   * @param v 原始v坐标
+   * @param u_n 去畸变/归一化的u坐标
+   * @param v_n 去畸变/归一化的v坐标
    *
-   * This will update a given feature based on the passed ID it has.
-   * It will create a new feature, if it is an ID that we have not seen before.
+   * 这将根据传递的ID更新给定的特征。
+   * 如果是我们之前没有见过的ID，它将创建一个新特征。
    */
   void update_feature(size_t id, double timestamp, size_t cam_id, float u, float v, float u_n, float v_n);
 
   /**
-   * @brief Get features that do not have newer measurement then the specified time.
+   * @brief 获取没有比指定时间更新的测量的特征。
    *
-   * This function will return all features that do not a measurement at a time greater than the specified time.
-   * For example this could be used to get features that have not been successfully tracked into the newest frame.
-   * All features returned will not have any measurements occurring at a time greater then the specified.
+   * 此函数将返回所有没有在大于指定时间的时刻进行测量的特征。
+   * 例如，这可以用来获取没有成功跟踪到最新帧的特征。
+   * 返回的所有特征都不会有在大于指定时间的时刻发生的任何测量。
    */
   std::vector<std::shared_ptr<Feature>> features_not_containing_newer(double timestamp, bool remove = false, bool skip_deleted = false);
 
   /**
-   * @brief Get features that has measurements older then the specified time.
+   * @brief 获取有比指定时间更早的测量的特征。
    *
-   * This will collect all features that have measurements occurring before the specified timestamp.
-   * For example, we would want to remove all features older then the last clone/state in our sliding window.
+   * 这将收集所有在指定时间戳之前发生测量的特征。
+   * 例如，我们想要移除所有比滑动窗口中最后一个克隆/状态更早的特征。
    */
   std::vector<std::shared_ptr<Feature>> features_containing_older(double timestamp, bool remove = false, bool skip_deleted = false);
 
   /**
-   * @brief Get features that has measurements at the specified time.
+   * @brief 获取在指定时间有测量的特征。
    *
-   * This function will return all features that have the specified time in them.
-   * This would be used to get all features that occurred at a specific clone/state.
+   * 此函数将返回所有包含指定时间的特征。
+   * 这将用于获取在特定克隆/状态时发生的所有特征。
    */
   std::vector<std::shared_ptr<Feature>> features_containing(double timestamp, bool remove = false, bool skip_deleted = false);
 
   /**
-   * @brief This function will delete all features that have been used up.
+   * @brief 此函数将删除所有已用完的特征。
    *
-   * If a feature was unable to be used, it will still remain since it will not have a delete flag set
+   * 如果特征无法使用，它仍将保留，因为它不会设置删除标志
    */
   void cleanup();
 
   /**
-   * @brief This function will delete all feature measurements that are older then the specified timestamp
+   * @brief 此函数将删除所有早于指定时间戳的特征测量
    */
   void cleanup_measurements(double timestamp);
 
   /**
-   * @brief This function will delete all feature measurements that are at the specified timestamp
+   * @brief 此函数将删除所有在指定时间戳的特征测量
    */
   void cleanup_measurements_exact(double timestamp);
 
   /**
-   * @brief Returns the size of the feature database
+   * @brief 返回特征数据库的大小
    */
   size_t size() {
     std::lock_guard<std::mutex> lck(mtx);
@@ -141,7 +141,7 @@ public:
   }
 
   /**
-   * @brief Returns the internal data (should not normally be used)
+   * @brief 返回内部数据（通常不应使用）
    */
   std::unordered_map<size_t, std::shared_ptr<Feature>> get_internal_data() {
     std::lock_guard<std::mutex> lck(mtx);
@@ -149,20 +149,26 @@ public:
   }
 
   /**
-   * @brief Gets the oldest time in the database
+   * @brief 获取数据库中最早的时间
    */
   double get_oldest_timestamp();
 
   /**
-   * @brief Will update the passed database with this database's latest feature information.
+   * @brief 将使用此数据库的最新特征信息更新传递的数据库。
    */
   void append_new_measurements(const std::shared_ptr<FeatureDatabase> &database);
 
 protected:
-  /// Mutex lock for our map
+  /// 我们映射的互斥锁
   std::mutex mtx;
 
-  /// Our lookup array that allow use to query based on ID
+  /// 允许我们基于ID查询的查找数组
+  /// unordered_map<特征ID, 特征指针>
+  /// 特征指针内: 
+  //     1. 特征ID 
+  //     2. unordered_map<相机ID, 观测坐标序列> 
+  //     3. unordered_map<相机ID, 归一化平面坐标序列> 
+  //     4. unordered_map<相机ID, 观测时间戳序列> 
   std::unordered_map<size_t, std::shared_ptr<Feature>> features_idlookup;
 };
 

@@ -30,9 +30,10 @@
 
 using namespace ov_core;
 
+/// 视觉追踪模块的核心入口函数，负责处理新相机数据并执行特征跟踪
 void TrackDescriptor::feed_new_camera(const CameraData &message) {
 
-  // Error check that we have all the data
+  // 输入数据的错误检测
   if (message.sensor_ids.empty() || message.sensor_ids.size() != message.images.size() || message.images.size() != message.masks.size()) {
     PRINT_ERROR(RED "[ERROR]: MESSAGE DATA SIZES DO NOT MATCH OR EMPTY!!!\n" RESET);
     PRINT_ERROR(RED "[ERROR]:   - message.sensor_ids.size() = %zu\n" RESET, message.sensor_ids.size());
@@ -41,8 +42,7 @@ void TrackDescriptor::feed_new_camera(const CameraData &message) {
     std::exit(EXIT_FAILURE);
   }
 
-  // Either call our stereo or monocular version
-  // If we are doing binocular tracking, then we should parallize our tracking
+  // 根据输入图像数量选择执行单目或双目跟踪
   size_t num_images = message.images.size();
   if (num_images == 1) {
     feed_monocular(message, 0);
@@ -177,6 +177,24 @@ void TrackDescriptor::feed_monocular(const CameraData &message, size_t msg_id) {
   PRINT_ALL("[TIME-DESC]: %.4f seconds for total\n", (rT5 - rT1).total_microseconds() * 1e-6);
 }
 
+/**
+ * @brief 处理一对立体相机图像，完成特征检测、匹配与数据库更新
+ * @param message    包含时间戳、图像、mask、相机ID等信息的数据结构
+ * @param msg_id_left   左相机在 message 中的索引
+ * @param msg_id_right  右相机在 message 中的索引
+ *
+ * 主要流程如下：
+ * 1. 计时器启动，用于性能分析
+ * 2. 获取左右相机ID，并分别加锁，保证多线程安全
+ * 3. 对左右图像进行直方图均衡化（可选），并获取对应mask
+ * 4. 如果是第一帧或丢失跟踪，则初始化特征点、描述子和ID，并保存为“上一帧”状态，直接返回
+ * 5. 否则，提取当前帧的特征点、描述子和ID
+ * 6. 分别对左右相机做时序匹配（上一帧 vs 当前帧），得到左右各自的匹配关系
+ * 7. 遍历所有新检测到的特征点，若能在左右都找到与上一帧一致的ID，则沿用旧ID，否则分配新ID
+ * 8. 将最终的特征点、描述子和ID，更新到特征数据库中（包括去畸变坐标）
+ * 9. 更新“上一帧”状态，保存当前帧的图像、mask、特征点、描述子和ID
+ * 10. 打印各阶段耗时信息，便于性能分析
+ */
 void TrackDescriptor::feed_stereo(const CameraData &message, size_t msg_id_left, size_t msg_id_right) {
 
   // Start timing

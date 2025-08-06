@@ -42,20 +42,20 @@ class FeatureHelper {
 
 public:
   /**
-   * @brief This functions will compute the disparity between common features in the two frames.
+   * @brief 此函数将计算两个帧中共同特征之间的视差。
+   * (直接计算像素坐标的欧氏距离)
+   * 首先我们找到第一帧中的所有特征。
+   * 然后我们遍历每个特征并在下一个请求的帧中找到它的uv坐标。
+   * 如果没有找到跟踪的特征（它丢失了），则跳过该特征。
+   * 注意：这是基于特征的原始坐标，而不是归一化坐标。
+   * 注意：这计算的是所有相机的视差！
    *
-   * First we find all features in the first frame.
-   * Then we loop through each and find the uv of it in the next requested frame.
-   * Features are skipped if no tracked feature is found (it was lost).
-   * NOTE: this is on the RAW coordinates of the feature not the normalized ones.
-   * NOTE: This computes the disparity over all cameras!
-   *
-   * @param db Feature database pointer
-   * @param time0 First camera frame timestamp
-   * @param time1 Second camera frame timestamp
-   * @param disp_mean Average raw disparity
-   * @param disp_var Variance of the disparities
-   * @param total_feats Total number of common features
+   * @param db 特征数据库指针
+   * @param time0 第一个相机帧时间戳
+   * @param time1 第二个相机帧时间戳
+   * @param disp_mean 平均原始视差
+   * @param disp_var 视差的方差
+   * @param total_feats 共同特征的总数
    */
   static void compute_disparity(std::shared_ptr<ov_core::FeatureDatabase> db, double time0, double time1, double &disp_mean,
                                 double &disp_var, int &total_feats) {
@@ -108,17 +108,22 @@ public:
   }
 
   /**
-   * @brief This functions will compute the disparity over all features we have
+   * @brief 此函数将计算我们拥有的所有特征的视差
+   * (直接计算像素坐标的欧氏距离)
+   * 1. 遍历数据库中的所有特征
+   * 2. 对于每个特征，找到其最早和最晚的观测
+   * 3. 计算特征从最早到最晚观测的视差
+   * 4. 可以通过时间参数过滤特征范围
    *
-   * NOTE: this is on the RAW coordinates of the feature not the normalized ones.
-   * NOTE: This computes the disparity over all cameras!
+   * 注意：这是基于特征的原始坐标，而不是归一化坐标。
+   * 注意：这计算的是所有相机的视差！
    *
-   * @param db Feature database pointer
-   * @param disp_mean Average raw disparity
-   * @param disp_var Variance of the disparities
-   * @param total_feats Total number of common features
-   * @param newest_time Only compute disparity for ones older (-1 to disable)
-   * @param oldest_time Only compute disparity for ones newer (-1 to disable)
+   * @param db 特征数据库指针
+   * @param disp_mean 平均原始视差
+   * @param disp_var 视差的方差
+   * @param total_feats 共同特征的总数
+   * @param newest_time 仅计算比此时间更早的特征的视差（-1表示禁用）
+   * @param oldest_time 仅计算比此时间更新的特征的视差（-1表示禁用）
    */
   static void compute_disparity(std::shared_ptr<ov_core::FeatureDatabase> db, double &disp_mean, double &disp_var, int &total_feats,
                                 double newest_time = -1, double oldest_time = -1) {

@@ -71,7 +71,7 @@ VioManager::VioManager(VioManagerOptions &params_) : thread_init_running(false),
   cv::setNumThreads(params.num_opencv_threads);
   cv::setRNGSeed(0);
 
-  // 创建EKF状态核心对象
+  // 创建EKF状态核心对象（添加状态变量，初始化协方差矩阵等）
   state = std::make_shared<State>(params.state_options);
 
   // 设置 IMU 内参
@@ -130,7 +130,7 @@ VioManager::VioManager(VioManagerOptions &params_) : thread_init_running(false),
   //===================================================================================
   //===================================================================================
 
-  // 创建特征提取器
+  // INFO 创建特征提取器
   // NOTE：初始化后我们会增加总的特征跟踪数量
   // NOTE：我们会将总特征数在所有相机上均匀分配
   int init_max_features =
@@ -193,8 +193,8 @@ void VioManager::feed_measurement_imu(const ov_core::ImuData &message) {
     initializer->feed_imu(message, oldest_time);
   }
 
-  // 如果启用了零速更新器，则传递给它
-  // 如果只在开始阶段做零速更新且已经移动，则无需传递
+  // 传递给ZUPT的条件：1. 系统已初始化 <且> 2. ZUPT更新器必须创建了 <且> 3. 不是仅在开始阶段做零速更新 <或> 没有移动过
+  // 条件3成立的两种情况：a. 系统在整个运行过程中都需要ZUPT, b. 系统仅在开始阶段需要ZUPT, 已经初始化但未移动过
   if (is_initialized_vio && updaterZUPT != nullptr && (!params.zupt_only_at_beginning || !has_moved_since_zupt)) {
     updaterZUPT->feed_imu(message, oldest_time);
   }
@@ -288,7 +288,7 @@ void VioManager::track_image_and_update(const ov_core::CameraData &message_const
     assert(message_const.sensor_ids.at(i) != message_const.sensor_ids.at(i + 1));
   }
 
-  // Downsample if we are downsampling
+  // 如果需要下采样，将图像下采样一半
   ov_core::CameraData message = message_const;
   for (size_t i = 0; i < message.sensor_ids.size() && params.downsample_cameras; i++) {
     cv::Mat img = message.images.at(i);
@@ -311,9 +311,9 @@ void VioManager::track_image_and_update(const ov_core::CameraData &message_const
   }
   rT2 = boost::posix_time::microsec_clock::local_time();
 
-  // Check if we should do zero-velocity, if so update the state with it
-  // Note that in the case that we only use in the beginning initialization phase
-  // If we have since moved, then we should never try to do a zero velocity update!
+  // 检查我们是否应该做零速度，如果是的话，用它更新状态
+  // 传递给ZUPT的条件：1. 系统已初始化 <且> 2. ZUPT更新器必须创建了 <且> 3. 不是仅在开始阶段做零速更新 <或> 没有移动过
+  // 条件3成立的两种情况：a. 系统在整个运行过程中都需要ZUPT, b. 系统仅在开始阶段需要ZUPT, 已经初始化但未移动过
   if (is_initialized_vio && updaterZUPT != nullptr && (!params.zupt_only_at_beginning || !has_moved_since_zupt)) {
     // If the same state time, use the previous timestep decision
     if (state->_timestamp != message.timestamp) {
@@ -328,11 +328,12 @@ void VioManager::track_image_and_update(const ov_core::CameraData &message_const
     }
   }
 
-  // If we do not have VIO initialization, then try to initialize
-  // TODO: Or if we are trying to reset the system, then do that here!
+  // 如果系统未初始化，则尝试初始化
+  // TODO: 或者如果我们要重置系统，那么在这里做！
   if (!is_initialized_vio) {
     is_initialized_vio = try_to_initialize(message);
     if (!is_initialized_vio) {
+      // 如果没有初始化成功，由于不往下进行了，因此把上一步特征跟踪的耗时打印出来
       double time_track = (rT2 - rT1).total_microseconds() * 1e-6;
       PRINT_DEBUG(BLUE "[TIME]: %.4f seconds for tracking\n" RESET, time_track);
       return;

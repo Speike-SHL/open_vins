@@ -40,17 +40,17 @@
 namespace ov_init {
 
 /**
- * @brief Struct which stores all options needed for state estimation.
+ * @brief 存储状态估计所需所有选项的结构体。
  *
- * This is broken into a few different parts: estimator, trackers, and simulation.
- * If you are going to add a parameter here you will need to add it to the parsers.
- * You will also need to add it to the print statement at the bottom of each.
+ * 这被分为几个不同的部分：估计器、跟踪器和仿真。
+ * 如果您要在此处添加参数，则需要将其添加到解析器中。
+ * 您还需要将其添加到每个部分底部的打印语句中。
  */
 struct InertialInitializerOptions {
 
   /**
-   * @brief This function will load the non-simulation parameters of the system and print.
-   * @param parser If not null, this parser will be used to load our parameters
+   * @brief 此函数将加载系统的非仿真参数并打印。
+   * @param parser 如果不为空，此解析器将用于加载我们的参数
    */
   void print_and_load(const std::shared_ptr<ov_core::YamlParser> &parser = nullptr) {
     print_and_load_initializer(parser);
@@ -60,66 +60,66 @@ struct InertialInitializerOptions {
 
   // INITIALIZATION ============================
 
-  /// Amount of time we will initialize over (seconds)
+  /// 我们将进行初始化的时间长度（秒）
   double init_window_time = 1.0;
 
-  /// Variance threshold on our acceleration to be classified as moving
+  /// 加速度方差阈值，用于判断是否在运动
   double init_imu_thresh = 1.0;
 
-  /// Max disparity we will consider the unit to be stationary
+  /// 认为设备静止的最大视差
   double init_max_disparity = 1.0;
 
-  /// Number of features we should try to track
+  /// 我们应该尝试跟踪的特征点数量
   int init_max_features = 50;
 
-  /// If we should perform dynamic initialization
+  /// 是否应该执行动态初始化
   bool init_dyn_use = false;
 
-  /// If we should optimize and recover the calibration in our MLE
+  /// 是否应该在MLE中优化和恢复标定参数
   bool init_dyn_mle_opt_calib = false;
 
-  /// Max number of MLE iterations for dynamic initialization
+  /// 动态初始化的最大MLE迭代次数
   int init_dyn_mle_max_iter = 20;
 
-  /// Max number of MLE threads for dynamic initialization
+  /// 动态初始化的最大MLE线程数
   int init_dyn_mle_max_threads = 20;
 
-  /// Max time for MLE optimization (seconds)
+  /// MLE优化的最大时间（秒）
   double init_dyn_mle_max_time = 5.0;
 
-  /// Number of poses to use during initialization (max should be cam freq * window)
+  /// 初始化期间使用的姿态数量（最大应为相机频率 * 窗口）
   int init_dyn_num_pose = 5;
 
-  /// Minimum degrees we need to rotate before we try to init (sum of norm)
+  /// 尝试初始化前需要旋转的最小角度（范数和）
   double init_dyn_min_deg = 45.0;
 
-  /// Magnitude we will inflate initial covariance of orientation
+  /// 膨胀初始方向协方差的幅度
   double init_dyn_inflation_orientation = 10.0;
 
-  /// Magnitude we will inflate initial covariance of velocity
+  /// 膨胀初始速度协方差的幅度
   double init_dyn_inflation_velocity = 10.0;
 
-  /// Magnitude we will inflate initial covariance of gyroscope bias
+  /// 膨胀陀螺仪偏差初始协方差的幅度
   double init_dyn_inflation_bias_gyro = 100.0;
 
-  /// Magnitude we will inflate initial covariance of accelerometer bias
+  /// 膨胀加速度计偏差初始协方差的幅度
   double init_dyn_inflation_bias_accel = 100.0;
 
-  /// Minimum reciprocal condition number acceptable for our covariance recovery (min_sigma / max_sigma <
-  /// sqrt(min_reciprocal_condition_number))
+  /// 协方差恢复可接受的最小倒数条件数（min_sigma / max_sigma <
+  /// sqrt(min_reciprocal_condition_number)）
   double init_dyn_min_rec_cond = 1e-15;
 
-  /// Initial IMU gyroscope bias values for dynamic initialization (will be optimized)
+  /// 动态初始化的初始IMU陀螺仪偏差值（将被优化）
   Eigen::Vector3d init_dyn_bias_g = Eigen::Vector3d::Zero();
 
-  /// Initial IMU accelerometer bias values for dynamic initialization (will be optimized)
+  /// 动态初始化的初始IMU加速度计偏差值（将被优化）
   Eigen::Vector3d init_dyn_bias_a = Eigen::Vector3d::Zero();
 
   /**
-   * @brief This function will load print out all initializer settings loaded.
-   * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.
+   * @brief 此函数将加载并打印所有已加载的初始化器设置。
+   * 这允许可视化检查是否从ROS/CMD解析器正确加载了所有内容。
    *
-   * @param parser If not null, this parser will be used to load our parameters
+   * @param parser 如果不为空，此解析器将用于加载我们的参数
    */
   void print_and_load_initializer(const std::shared_ptr<ov_core::YamlParser> &parser = nullptr) {
     PRINT_DEBUG("INITIALIZATION SETTINGS:\n");
@@ -191,26 +191,26 @@ struct InertialInitializerOptions {
 
   // NOISE / CHI2 ============================
 
-  /// Gyroscope white noise (rad/s/sqrt(hz))
+  /// 陀螺仪白噪声（rad/s/sqrt(hz)）
   double sigma_w = 1.6968e-04;
 
-  /// Gyroscope random walk (rad/s^2/sqrt(hz))
+  /// 陀螺仪随机游走（rad/s^2/sqrt(hz)）
   double sigma_wb = 1.9393e-05;
 
-  /// Accelerometer white noise (m/s^2/sqrt(hz))
+  /// 加速度计白噪声（m/s^2/sqrt(hz)）
   double sigma_a = 2.0000e-3;
 
-  /// Accelerometer random walk (m/s^3/sqrt(hz))
+  /// 加速度计随机游走（m/s^3/sqrt(hz)）
   double sigma_ab = 3.0000e-03;
 
-  /// Noise sigma for our raw pixel measurements
+  /// 原始像素测量的噪声标准差
   double sigma_pix = 1;
 
   /**
-   * @brief This function will load print out all noise parameters loaded.
-   * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.
+   * @brief 此函数将加载并打印所有已加载的噪声参数。
+   * 这允许可视化检查是否从ROS/CMD解析器正确加载了所有内容。
    *
-   * @param parser If not null, this parser will be used to load our parameters
+   * @param parser 如果不为空，此解析器将用于加载我们的参数
    */
   void print_and_load_noise(const std::shared_ptr<ov_core::YamlParser> &parser = nullptr) {
     PRINT_DEBUG("NOISE PARAMETERS:\n");
@@ -230,32 +230,32 @@ struct InertialInitializerOptions {
 
   // STATE DEFAULTS ==========================
 
-  /// Gravity magnitude in the global frame (i.e. should be 9.81 typically)
+  /// 全局坐标系中的重力大小（通常应为9.81）
   double gravity_mag = 9.81;
 
-  /// Number of distinct cameras that we will observe features in
+  /// 我们将在其中观察特征的不同相机数量
   int num_cameras = 1;
 
-  /// If we should process two cameras are being stereo or binocular. If binocular, we do monocular feature tracking on each image.
+  /// 是否应该将两个相机作为立体或双目处理。如果是双目，我们对每个图像进行单目特征跟踪。
   bool use_stereo = true;
 
-  /// Will half the resolution all tracking image (aruco will be 1/4 instead of halved if dowsize_aruoc also enabled)
+  /// 将使所有跟踪图像的分辨率减半（如果同时启用了dowsize_aruco，aruco将是1/4而不是减半）
   bool downsample_cameras = false;
 
-  /// Time offset between camera and IMU (t_imu = t_cam + t_off)
+  /// 相机和IMU之间的时间偏移（t_imu = t_cam + t_off）
   double calib_camimu_dt = 0.0;
 
-  /// Map between camid and camera intrinsics (fx, fy, cx, cy, d1...d4, cam_w, cam_h)
+  /// 相机ID和相机内参之间的映射（fx, fy, cx, cy, d1...d4, cam_w, cam_h）
   std::unordered_map<size_t, std::shared_ptr<ov_core::CamBase>> camera_intrinsics;
 
-  /// Map between camid and camera extrinsics (q_ItoC, p_IinC).
+  /// 相机ID和相机外参之间的映射（q_ItoC, p_IinC）。
   std::map<size_t, Eigen::VectorXd> camera_extrinsics;
 
   /**
-   * @brief This function will load and print all state parameters (e.g. sensor extrinsics)
-   * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.
+   * @brief 此函数将加载并打印所有状态参数（例如传感器外参）
+   * 这允许可视化检查是否从ROS/CMD解析器正确加载了所有内容。
    *
-   * @param parser If not null, this parser will be used to load our parameters
+   * @param parser 如果不为空，此解析器将用于加载我们的参数
    */
   void print_and_load_state(const std::shared_ptr<ov_core::YamlParser> &parser = nullptr) {
     if (parser != nullptr) {
@@ -265,17 +265,17 @@ struct InertialInitializerOptions {
       parser->parse_config("downsample_cameras", downsample_cameras);
       for (int i = 0; i < num_cameras; i++) {
 
-        // Time offset (use the first one)
-        // TODO: support multiple time offsets between cameras
+        // 时间偏移（使用第一个）
+        // TODO: 支持相机之间的多个时间偏移
         if (i == 0) {
           parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "timeshift_cam_imu", calib_camimu_dt, false);
         }
 
-        // Distortion model
+        // 畸变模型
         std::string dist_model = "radtan";
         parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "distortion_model", dist_model);
 
-        // Distortion parameters
+        // 畸变参数
         std::vector<double> cam_calib1 = {1, 1, 0, 0};
         std::vector<double> cam_calib2 = {0, 0, 0, 0};
         parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "intrinsics", cam_calib1);
@@ -288,22 +288,22 @@ struct InertialInitializerOptions {
         cam_calib(2) /= (downsample_cameras) ? 2.0 : 1.0;
         cam_calib(3) /= (downsample_cameras) ? 2.0 : 1.0;
 
-        // FOV / resolution
+        // 视场角 / 分辨率
         std::vector<int> matrix_wh = {1, 1};
         parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "resolution", matrix_wh);
         matrix_wh.at(0) /= (downsample_cameras) ? 2.0 : 1.0;
         matrix_wh.at(1) /= (downsample_cameras) ? 2.0 : 1.0;
 
-        // Extrinsics
+        // 外参
         Eigen::Matrix4d T_CtoI = Eigen::Matrix4d::Identity();
         parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "T_imu_cam", T_CtoI);
 
-        // Load these into our state
+        // 将这些加载到我们的状态中
         Eigen::Matrix<double, 7, 1> cam_eigen;
         cam_eigen.block(0, 0, 4, 1) = ov_core::rot_2_quat(T_CtoI.block(0, 0, 3, 3).transpose());
         cam_eigen.block(4, 0, 3, 1) = -T_CtoI.block(0, 0, 3, 3).transpose() * T_CtoI.block(0, 3, 3, 1);
 
-        // Create intrinsics model
+        // 创建内参模型
         if (dist_model == "equidistant") {
           camera_intrinsics.insert({i, std::make_shared<ov_core::CamEqui>(matrix_wh.at(0), matrix_wh.at(1))});
           camera_intrinsics.at(i)->set_value(cam_calib);
@@ -347,43 +347,42 @@ struct InertialInitializerOptions {
 
   // SIMULATOR ===============================
 
-  /// Seed for initial states (i.e. random feature 3d positions in the generated map)
+  /// 初始状态的随机种子（即生成地图中随机特征的3D位置）
   int sim_seed_state_init = 0;
 
-  /// Seed for calibration perturbations. Change this to perturb by different random values if perturbations are enabled.
+  /// 标定扰动的随机种子。如果启用了扰动，请更改此值以通过不同的随机值进行扰动。
   int sim_seed_preturb = 0;
 
-  /// Measurement noise seed. This should be incremented for each run in the Monte-Carlo simulation to generate the same true measurements,
-  /// but diffferent noise values.
+  /// 测量噪声种子。在蒙特卡洛仿真中，每次运行都应该增加此值，以生成相同的真实测量值，
+  /// 但产生不同的噪声值。
   int sim_seed_measurements = 0;
 
-  /// If we should perturb the calibration that the estimator starts with
+  /// 是否应该扰动估计器开始时的标定参数
   bool sim_do_perturbation = false;
 
-  /// Path to the trajectory we will b-spline and simulate on. Should be time(s),pos(xyz),ori(xyzw) format.
+  /// 我们将进行B样条插值和仿真的轨迹路径。应为time(s),pos(xyz),ori(xyzw)格式。
   std::string sim_traj_path = "../ov_data/sim/udel_gore.txt";
 
-  /// We will start simulating after we have moved this much along the b-spline. This prevents static starts as we init from groundtruth in
-  /// simulation.
+  /// 我们将在沿B样条移动这么多距离后开始仿真。这防止了静态开始，因为我们在仿真中从真实值初始化。
   double sim_distance_threshold = 1.2;
 
-  /// Frequency (Hz) that we will simulate our cameras
+  /// 我们将仿真相机的频率（Hz）
   double sim_freq_cam = 10.0;
 
-  /// Frequency (Hz) that we will simulate our inertial measurement unit
+  /// 我们将仿真惯性测量单元的频率（Hz）
   double sim_freq_imu = 400.0;
 
-  /// Feature distance we generate features from (minimum)
+  /// 我们生成特征的特征距离（最小值）
   double sim_min_feature_gen_distance = 5;
 
-  /// Feature distance we generate features from (maximum)
+  /// 我们生成特征的特征距离（最大值）
   double sim_max_feature_gen_distance = 10;
 
   /**
-   * @brief This function will load print out all simulated parameters.
-   * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.
+   * @brief 此函数将加载并打印所有仿真参数。
+   * 这允许可视化检查是否从ROS/CMD解析器正确加载了所有内容。
    *
-   * @param parser If not null, this parser will be used to load our parameters
+   * @param parser 如果不为空，此解析器将用于加载我们的参数
    */
   void print_and_load_simulation(const std::shared_ptr<ov_core::YamlParser> &parser = nullptr) {
     if (parser != nullptr) {

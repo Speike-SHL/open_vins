@@ -94,7 +94,7 @@ State::State(StateOptions &options) {
     }
   }
 
-  // Camera to IMU time offset
+  // 相机到 imu 的时间偏移
   _calib_dt_CAMtoIMU = std::make_shared<Vec>(1);
   if (_options.do_calib_camera_timeoffset) {
     _calib_dt_CAMtoIMU->set_local_id(current_id);

@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
   VioManagerOptions params;
   params.print_and_load(parser);              // 从解析器加载参数值
   params.use_multi_threading_subs = true;     // 使用多线程订阅
-  sys = std::make_shared<VioManager>(params); // 创建VIO系统
+  sys = std::make_shared<VioManager>(params); // 创建VIO系统 !!!
 #if ROS_AVAILABLE == 1
   viz = std::make_shared<ROS1Visualizer>(nh, sys);
   viz->setup_subscribers(parser);
